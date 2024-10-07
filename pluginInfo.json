@@ -10,14 +10,14 @@
     {
       "minFPPVersion": "6.0",
       "maxFPPVersion": "7.99",
-      "branch": "main",
+      "branch": "gpg_key_fix",
       "sha": "",
       "allowUpdates": 1
 	  },
     {
       "minFPPVersion": "8.0",
       "maxFPPVersion": "0",
-      "branch": "main",
+      "branch": "gpg_key_fix",
       "sha": "",
       "allowUpdates": 1
     }
