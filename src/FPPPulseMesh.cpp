@@ -12,6 +12,7 @@
 #include <cstring>
 #include <stdexcept>
 #include <memory>
+#include <mutex> // Added for thread safety
 
 #include "Plugin.h"
 #include "MultiSync.h"
@@ -20,7 +21,11 @@
 class FPPPulseMeshPlugin : public FPPPlugin, public MultiSyncPlugin
 {
 public:
-    FPPPulseMeshPlugin() : FPPPlugin("fpp-PulseMesh"), m_lastMediaHalfSecond(0), m_sockfd(-1)
+    FPPPulseMeshPlugin() 
+        : FPPPlugin("fpp-PulseMesh"), 
+          m_lastMediaHalfSecond(0), 
+          m_sockfd(-1),
+          m_sendErrorCount(0)
     {
         LogInfo(VB_PLUGIN, "Initializing PulseMesh Connector Plugin\n");
 
@@ -31,7 +36,12 @@ public:
             WarningHolder::AddWarning("PulseMesh Connector Plugin enabled, but MultiSync is not enabled. Please enable MultiSync to use PulseMesh Connector.");
         }
 
-        initSocket();
+        try {
+            initSocket();
+        } catch (const std::exception &e) {
+            LogErr(VB_PLUGIN, "Initialization failed: " + std::string(e.what()) + "\n");
+            m_socketInitialized = false;
+        }
     }
 
     virtual ~FPPPulseMeshPlugin()
@@ -42,30 +52,37 @@ public:
 
     virtual void SendMediaOpenPacket(const std::string &filename) override
     {
+        if (!m_socketInitialized) return;
         std::string message = "SendMediaOpenPacket/" + filename;
         writeToSocket(message);
     }
 
     virtual void SendMediaSyncStartPacket(const std::string &filename) override
     {
+        if (!m_socketInitialized) return;
         std::string message = "SendMediaSyncStartPacket/" + filename;
         writeToSocket(message);
     }
 
     virtual void SendMediaSyncStopPacket(const std::string &filename) override
     {
+        if (!m_socketInitialized) return;
         std::string message = "SendMediaSyncStopPacket/" + filename;
         writeToSocket(message);
     }
 
     virtual void SendMediaSyncPacket(const std::string &filename, float seconds) override
     {
+        if (!m_socketInitialized) return;
         int curTS = static_cast<int>(seconds * 2.0f);
-        if (m_lastMediaHalfSecond == curTS)
         {
-            return;
+            std::lock_guard<std::mutex> lock(m_mutex);
+            if (m_lastMediaHalfSecond == curTS)
+            {
+                return;
+            }
+            m_lastMediaHalfSecond = curTS;
         }
-        m_lastMediaHalfSecond = curTS;
         std::string message = "SendMediaSyncPacket/" + filename + "/" + std::to_string(seconds);
         writeToSocket(message);
     }
@@ -74,6 +91,10 @@ private:
     int m_sockfd;
     struct sockaddr_un m_addr;
     int m_lastMediaHalfSecond;
+    mutable std::mutex m_mutex;
+    mutable std::mutex m_logMutex;
+    mutable int m_sendErrorCount;
+    bool m_socketInitialized = true;
 
     void initSocket()
     {
@@ -92,6 +113,10 @@ private:
         }
         std::copy(socket_path.begin(), socket_path.end(), m_addr.sun_path);
         m_addr.sun_path[socket_path.length()] = '\0';
+
+        if (access(socket_path.c_str(), W_OK) != 0) {
+            throw std::runtime_error("Cannot access socket path: " + std::string(strerror(errno)));
+        }
     }
 
     void closeSocket()
@@ -115,13 +140,26 @@ private:
                               reinterpret_cast<const struct sockaddr*>(&m_addr), sizeof(m_addr));
         if (sent < 0)
         {
-            LogErr(VB_PLUGIN, "Failed to send message '%s': %s\n", message.c_str(), strerror(errno));
+            {
+                std::lock_guard<std::mutex> lock(m_logMutex);
+                m_sendErrorCount++;
+                if (m_sendErrorCount <= 10) {
+                    LogErr(VB_PLUGIN, "Failed to send message: " + message + ": " + std::string(strerror(errno)) + "\n");
+                } else if (m_sendErrorCount == 11) {
+                    LogErr(VB_PLUGIN, "Further send errors suppressed to prevent log flooding.\n");
+                }
+            }
             return false;
         }
         else if (static_cast<size_t>(sent) < message.size())
         {
-            LogWarn(VB_PLUGIN, "Message truncated: sent %zd of %zu bytes\n", sent, message.size());
+            LogWarn(VB_PLUGIN, "Message truncated: sent " + std::to_string(sent) + " of " + std::to_string(message.size()) + " bytes\n");
             return false;
+        }
+
+        {
+            std::lock_guard<std::mutex> lock(m_logMutex);
+            m_sendErrorCount = 0;
         }
         return true;
     }
