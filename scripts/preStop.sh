@@ -31,6 +31,8 @@ stop_docker() {
             echo "PulseMesh Connector is not running."
         fi
     fi
+
+    rm /tmp/PULSE
 }
 
 if [ -f "/.dockerenv" ]; then
