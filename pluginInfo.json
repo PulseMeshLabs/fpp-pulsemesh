@@ -9,15 +9,22 @@
   "versions": [
     {
       "minFPPVersion": "6.0",
-      "maxFPPVersion": "7.99",
-      "branch": "main",
+      "maxFPPVersion": "6.99",
+      "branch": "fpp_v6",
       "sha": "",
       "allowUpdates": 1
-	  },
+    },
+    {
+      "minFPPVersion": "7.0",
+      "maxFPPVersion": "7.99",
+      "branch": "gpg_key_fix",
+      "sha": "",
+      "allowUpdates": 1
+    },
     {
       "minFPPVersion": "8.0",
       "maxFPPVersion": "0",
-      "branch": "main",
+      "branch": "gpg_key_fix",
       "sha": "",
       "allowUpdates": 1
     }
