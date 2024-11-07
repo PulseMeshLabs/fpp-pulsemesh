@@ -23,7 +23,7 @@ class FPPPulseMeshPlugin : public FPPPlugin, public MultiSyncPlugin
 public:
     FPPPulseMeshPlugin() 
         : FPPPlugin("fpp-PulseMesh"), 
-          m_lastMediaHalfSecond(0), 
+          m_lastMediaHalfSecond(-1), 
           m_sockfd(-1),
           m_sendErrorCount(0)
     {
