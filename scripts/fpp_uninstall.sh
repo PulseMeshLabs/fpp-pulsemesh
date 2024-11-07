@@ -11,4 +11,3 @@ else
 
     echo "Removed pulsemesh-connector"
 fi
-
