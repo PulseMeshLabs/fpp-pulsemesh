@@ -14,6 +14,7 @@
 #include <memory>
 #include <mutex>
 #include <jsoncpp/json/json.h> // Ensure jsoncpp is included
+#include <fstream> // For file operations
 
 #include "Plugin.h"
 #include "MultiSync.h"
@@ -61,6 +62,14 @@ public:
 
         // Log the playlist content
         LogInfo(VB_PLUGIN, "Playlist Callback Invoked:\n" + playlistStr + "\n");
+
+        // Log additional parameters
+        LogInfo(VB_PLUGIN, "Action: " + action + "\n");
+        LogInfo(VB_PLUGIN, "Section: " + section + "\n");
+        LogInfo(VB_PLUGIN, "Item: " + std::to_string(item) + "\n");
+
+        // Write the playlist to a file in /tmp
+        writePlaylistToFile(playlistStr);
     }
 
     virtual void SendMediaOpenPacket(const std::string &filename) override
@@ -175,6 +184,38 @@ private:
             m_sendErrorCount = 0;
         }
         return true;
+    }
+
+    void writePlaylistToFile(const std::string& playlistStr) const
+    {
+        // Define the file path
+        const std::string filePath = "/tmp/fpp_pulsemesh_playlist.json";
+
+        // Open the file in append mode
+        std::ofstream outFile(filePath, std::ios::out | std::ios::app);
+        if (!outFile.is_open())
+        {
+            std::lock_guard<std::mutex> lock(m_logMutex);
+            LogErr(VB_PLUGIN, "Failed to open file for writing playlist: " + filePath + "\n");
+            return;
+        }
+
+        // Write the playlist string with a timestamp
+        outFile << "----- Playlist Callback at " << getCurrentTimestamp() << " -----\n";
+        outFile << playlistStr << "\n\n";
+        outFile.close();
+
+        // Optionally, log that the playlist was written to the file
+        LogInfo(VB_PLUGIN, "Playlist written to " + filePath + "\n");
+    }
+
+    std::string getCurrentTimestamp() const
+    {
+        // Get current time
+        std::time_t now = std::time(nullptr);
+        char buf[64];
+        std::strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M:%S", std::localtime(&now));
+        return std::string(buf);
     }
 };
 
