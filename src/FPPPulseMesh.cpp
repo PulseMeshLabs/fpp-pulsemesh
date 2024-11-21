@@ -60,9 +60,6 @@ public:
         writer["indentation"] = ""; // Optional: remove indentation for compact logging
         std::string playlistStr = Json::writeString(writer, playlist);
 
-        // Log the playlist content
-        LogInfo(VB_PLUGIN, "Playlist Callback Invoked:\n" + playlistStr + "\n");
-
         // Log additional parameters
         LogInfo(VB_PLUGIN, "Action: " + action + "\n");
         LogInfo(VB_PLUGIN, "Section: " + section + "\n");
@@ -70,6 +67,52 @@ public:
 
         // Write the playlist to a file in /tmp
         writePlaylistToFile(playlistStr);
+
+        // Extract 'size' and 'name' from the playlist JSON
+        int size = 0;
+        std::string name;
+
+        if (playlist.isMember("size") && playlist["size"].isInt())
+        {
+            size = playlist["size"].asInt();
+        }
+        else
+        {
+            LogErr(VB_PLUGIN, "Playlist JSON does not contain a valid 'size' field.\n");
+            return; // Exit early if 'size' is invalid
+        }
+
+        if (playlist.isMember("name") && playlist["name"].isString())
+        {
+            name = playlist["name"].asString();
+        }
+        else
+        {
+            LogErr(VB_PLUGIN, "Playlist JSON does not contain a valid 'name' field.\n");
+            return; // Exit early if 'name' is invalid
+        }
+
+        // Check the conditions
+        if (size > 1 && (action == "playing" || action == "start"))
+        {
+            // Sanitize inputs to prevent message formatting issues
+            std::string sanitizedName = sanitizeString(name);
+            std::string sanitizedSection = sanitizeString(section);
+            std::string sanitizedItem = std::to_string(item); // 'item' is already an integer
+
+            // Compose the message
+            std::string message = "SendPlaylistUpdate/" + sanitizedName + "/" + sanitizedSection + "/" + sanitizedItem;
+
+            // Send the message to the socket
+            if (!writeToSocket(message))
+            {
+                LogErr(VB_PLUGIN, "Failed to send SendPlaylistUpdate message.\n");
+            }
+            else
+            {
+                LogInfo(VB_PLUGIN, "SendPlaylistUpdate message sent: " + message + "\n");
+            }
+        }
     }
 
     virtual void SendMediaOpenPacket(const std::string &filename) override
@@ -216,6 +259,15 @@ private:
         char buf[64];
         std::strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M:%S", std::localtime(&now));
         return std::string(buf);
+    }
+
+    // Helper method to sanitize strings for socket messages
+    std::string sanitizeString(const std::string& input) const
+    {
+        std::string sanitized = input;
+        // Replace any '/' characters to prevent message format issues
+        std::replace(sanitized.begin(), sanitized.end(), '/', '_');
+        return sanitized;
     }
 };
 
