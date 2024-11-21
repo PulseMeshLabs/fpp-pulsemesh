@@ -12,7 +12,8 @@
 #include <cstring>
 #include <stdexcept>
 #include <memory>
-#include <mutex> // Added for thread safety
+#include <mutex>
+#include <jsoncpp/json/json.h> // Ensure jsoncpp is included
 
 #include "Plugin.h"
 #include "MultiSync.h"
@@ -48,6 +49,18 @@ public:
     {
         closeSocket();
         MultiSync::INSTANCE.removeMultiSyncPlugin(this);
+    }
+
+    // Override PlaylistEventPlugin's playlistCallback
+    virtual void playlistCallback(const Json::Value& playlist, const std::string& action, const std::string& section, int item) override
+    {
+        // Serialize the Json::Value to a string
+        Json::StreamWriterBuilder writer;
+        writer["indentation"] = ""; // Optional: remove indentation for compact logging
+        std::string playlistStr = Json::writeString(writer, playlist);
+
+        // Log the playlist content
+        LogInfo(VB_PLUGIN, "Playlist Callback Invoked:\n" + playlistStr + "\n");
     }
 
     virtual void SendMediaOpenPacket(const std::string &filename) override
