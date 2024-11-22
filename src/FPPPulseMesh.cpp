@@ -13,8 +13,7 @@
 #include <stdexcept>
 #include <memory>
 #include <mutex>
-#include <jsoncpp/json/json.h> // Ensure jsoncpp is included
-#include <fstream> // For file operations
+#include <jsoncpp/json/json.h>
 
 #include "Plugin.h"
 #include "MultiSync.h"
@@ -52,23 +51,8 @@ public:
         MultiSync::INSTANCE.removeMultiSyncPlugin(this);
     }
 
-    // Override PlaylistEventPlugin's playlistCallback
     virtual void playlistCallback(const Json::Value& playlist, const std::string& action, const std::string& section, int item) override
     {
-        // Serialize the Json::Value to a string
-        Json::StreamWriterBuilder writer;
-        writer["indentation"] = ""; // Optional: remove indentation for compact logging
-        std::string playlistStr = Json::writeString(writer, playlist);
-
-        // Log additional parameters
-        LogInfo(VB_PLUGIN, "Action: " + action + "\n");
-        LogInfo(VB_PLUGIN, "Section: " + section + "\n");
-        LogInfo(VB_PLUGIN, "Item: " + std::to_string(item) + "\n");
-
-        // Write the playlist to a file in /tmp
-        writePlaylistToFile(playlistStr);
-
-        // Extract 'size' and 'name' from the playlist JSON
         int size = 0;
         std::string name;
 
@@ -79,7 +63,7 @@ public:
         else
         {
             LogErr(VB_PLUGIN, "Playlist JSON does not contain a valid 'size' field.\n");
-            return; // Exit early if 'size' is invalid
+            return;
         }
 
         if (playlist.isMember("name") && playlist["name"].isString())
@@ -89,28 +73,20 @@ public:
         else
         {
             LogErr(VB_PLUGIN, "Playlist JSON does not contain a valid 'name' field.\n");
-            return; // Exit early if 'name' is invalid
+            return;
         }
 
-        // Check the conditions
         if (size > 1 && (action == "playing" || action == "start"))
         {
-            // Sanitize inputs to prevent message formatting issues
             std::string sanitizedName = sanitizeString(name);
             std::string sanitizedSection = sanitizeString(section);
-            std::string sanitizedItem = std::to_string(item); // 'item' is already an integer
+            std::string sanitizedItem = std::to_string(item);
 
-            // Compose the message
             std::string message = "SendPlaylistUpdate/" + sanitizedName + "/" + sanitizedSection + "/" + sanitizedItem;
 
-            // Send the message to the socket
             if (!writeToSocket(message))
             {
                 LogErr(VB_PLUGIN, "Failed to send SendPlaylistUpdate message.\n");
-            }
-            else
-            {
-                LogInfo(VB_PLUGIN, "SendPlaylistUpdate message sent: " + message + "\n");
             }
         }
     }
@@ -229,39 +205,6 @@ private:
         return true;
     }
 
-    void writePlaylistToFile(const std::string& playlistStr) const
-    {
-        // Define the file path
-        const std::string filePath = "/tmp/fpp_pulsemesh_playlist.json";
-
-        // Open the file in append mode
-        std::ofstream outFile(filePath, std::ios::out | std::ios::app);
-        if (!outFile.is_open())
-        {
-            std::lock_guard<std::mutex> lock(m_logMutex);
-            LogErr(VB_PLUGIN, "Failed to open file for writing playlist: " + filePath + "\n");
-            return;
-        }
-
-        // Write the playlist string with a timestamp
-        outFile << "----- Playlist Callback at " << getCurrentTimestamp() << " -----\n";
-        outFile << playlistStr << "\n\n";
-        outFile.close();
-
-        // Optionally, log that the playlist was written to the file
-        LogInfo(VB_PLUGIN, "Playlist written to " + filePath + "\n");
-    }
-
-    std::string getCurrentTimestamp() const
-    {
-        // Get current time
-        std::time_t now = std::time(nullptr);
-        char buf[64];
-        std::strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M:%S", std::localtime(&now));
-        return std::string(buf);
-    }
-
-    // Helper method to sanitize strings for socket messages
     std::string sanitizeString(const std::string& input) const
     {
         std::string sanitized = input;
