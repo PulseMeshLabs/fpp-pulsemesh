@@ -17,14 +17,14 @@
     {
       "minFPPVersion": "7.0",
       "maxFPPVersion": "7.99",
-      "branch": "preload",
+      "branch": "main",
       "sha": "",
       "allowUpdates": 1
     },
     {
       "minFPPVersion": "8.0",
       "maxFPPVersion": "0",
-      "branch": "preload",
+      "branch": "main",
       "sha": "",
       "allowUpdates": 1
     }
