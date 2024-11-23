@@ -12,7 +12,8 @@
 #include <cstring>
 #include <stdexcept>
 #include <memory>
-#include <mutex> // Added for thread safety
+#include <mutex>
+#include <jsoncpp/json/json.h>
 
 #include "Plugin.h"
 #include "MultiSync.h"
@@ -48,6 +49,46 @@ public:
     {
         closeSocket();
         MultiSync::INSTANCE.removeMultiSyncPlugin(this);
+    }
+
+    virtual void playlistCallback(const Json::Value& playlist, const std::string& action, const std::string& section, int item) override
+    {
+        int size = 0;
+        std::string name;
+
+        if (playlist.isMember("size") && playlist["size"].isInt())
+        {
+            size = playlist["size"].asInt();
+        }
+        else
+        {
+            LogErr(VB_PLUGIN, "Playlist JSON does not contain a valid 'size' field.\n");
+            return;
+        }
+
+        if (playlist.isMember("name") && playlist["name"].isString())
+        {
+            name = playlist["name"].asString();
+        }
+        else
+        {
+            LogErr(VB_PLUGIN, "Playlist JSON does not contain a valid 'name' field.\n");
+            return;
+        }
+
+        if (size > 1 && (action == "playing" || action == "start"))
+        {
+            std::string sanitizedName = sanitizeString(name);
+            std::string sanitizedSection = sanitizeString(section);
+            std::string sanitizedItem = std::to_string(item);
+
+            std::string message = "SendPlaylistUpdate/" + sanitizedName + "/" + sanitizedSection + "/" + sanitizedItem;
+
+            if (!writeToSocket(message))
+            {
+                LogErr(VB_PLUGIN, "Failed to send SendPlaylistUpdate message.\n");
+            }
+        }
     }
 
     virtual void SendMediaOpenPacket(const std::string &filename) override
@@ -162,6 +203,14 @@ private:
             m_sendErrorCount = 0;
         }
         return true;
+    }
+
+    std::string sanitizeString(const std::string& input) const
+    {
+        std::string sanitized = input;
+        // Replace any '/' characters to prevent message format issues
+        std::replace(sanitized.begin(), sanitized.end(), '/', '_');
+        return sanitized;
     }
 };
 
