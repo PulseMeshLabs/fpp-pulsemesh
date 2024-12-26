@@ -2,7 +2,7 @@
   "repoName": "fpp-PulseMesh",
   "name": "PulseMesh Connector",
   "author": "PulseMesh Labs",
-  "description": "Connector to PulseMesh.  Learn more at https://pulsemesh.io",
+  "description": "Listen to your display audio from your phone.  Learn more at https://pulsemesh.io",
   "homeURL": "https://github.com/PulseMeshLabs/fpp-pulsemesh",
   "srcURL": "https://github.com/PulseMeshLabs/fpp-pulsemesh.git",
   "bugURL": "https://github.com/PulseMeshLabs/fpp-pulsemesh/issues",
