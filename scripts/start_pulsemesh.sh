@@ -121,7 +121,10 @@ start_service() {
     log_info "Starting service with logging to: $LOG_FILE"
     
     # Use nohup to start the process in background
-    if ! nohup "$BINARY_PATH" >> "$LOG_FILE" 2>&1 &; then
+    nohup "$BINARY_PATH" >> "$LOG_FILE" 2>&1 &
+    local start_result=$?
+    
+    if [[ $start_result -ne 0 ]]; then
         log_error "Failed to start PulseMesh Connector"
         return 1
     fi
