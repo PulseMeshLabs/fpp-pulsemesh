@@ -2,4 +2,5 @@
 
 echo "Running fpp-pulsemesh PreStop Script"
 
-nohup ./stop_pulsemesh.sh >> /dev/null 2>&1 &
+SCRIPT_DIR="$(dirname "$0")"
+nohup "$SCRIPT_DIR/stop_pulsemesh.sh" > /dev/null 2>&1 &
