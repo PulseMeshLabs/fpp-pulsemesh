@@ -8,7 +8,8 @@ set -euo pipefail  # Exit on error, undefined vars, pipe failures
 # Configuration
 BINARY_NAME="pulsemesh-connector"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PID_FILE="$SCRIPT_DIR/pulsemesh-connector.pid"
+BINARY_DIR="$(dirname "$SCRIPT_DIR")"
+PID_FILE="$BINARY_DIR/pulsemesh-connector.pid"
 LOG_FILE="/home/fpp/media/logs/pulsemesh-connector.log"
 
 # Timeouts (in seconds)

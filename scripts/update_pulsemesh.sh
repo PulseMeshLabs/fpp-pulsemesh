@@ -8,10 +8,10 @@ set -euo pipefail  # Exit on error, undefined vars, pipe failures
 # Configuration
 VERSION_URL="https://pulsemesh.io/connectorapi/release/version"
 DOWNLOAD_BASE_URL="https://pulsemesh.io/connectorapi/release/download/linux"
-VERSION_FILE="pulsemesh_version.txt"
-BINARY_NAME="pulsemesh-connector"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BINARY_DIR="$(dirname "$SCRIPT_DIR")"
+VERSION_FILE="$BINARY_DIR/pulsemesh_version.txt"
+BINARY_NAME="pulsemesh-connector"
 BINARY_PATH="$BINARY_DIR/$BINARY_NAME"
 
 # Colors for output

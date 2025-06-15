@@ -11,7 +11,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BINARY_DIR="$(dirname "$SCRIPT_DIR")"
 BINARY_PATH="$BINARY_DIR/$BINARY_NAME"
 LOG_FILE="/home/fpp/media/logs/pulsemesh-connector.log"
-PID_FILE="$SCRIPT_DIR/pulsemesh-connector.pid"
+PID_FILE="$BINARY_DIR/pulsemesh-connector.pid"
 
 # Colors for output
 RED='\033[0;31m'
