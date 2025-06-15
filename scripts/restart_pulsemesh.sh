@@ -226,8 +226,11 @@ show_status() {
 # Main function
 main() {
     case "${1:-restart}" in
-        restart|--force)
-            restart_service "$1"
+        restart)
+            restart_service ""
+            ;;
+        --force)
+            restart_service "--force"
             ;;
         status)
             show_status
