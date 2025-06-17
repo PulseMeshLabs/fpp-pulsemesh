@@ -61,6 +61,7 @@ fi
 # Add CSP for loading PulseMesh config page for FPP 9+
 if [ -f "${FPPDIR}/scripts/ManageApacheContentPolicy.sh" ]; then
     ${FPPDIR}/scripts/ManageApacheContentPolicy.sh add default-src "http://*:8089"
+    ${FPPDIR}/scripts/ManageApacheContentPolicy.sh add default-src "https://*:8089"
 else
     echo "Skipping CSP addition: ManageApacheContentPolicy.sh not found"
 fi
