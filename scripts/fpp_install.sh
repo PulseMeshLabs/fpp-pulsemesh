@@ -58,6 +58,8 @@ else
     echo "Warning: start_pulsemesh.sh not found or not executable"
 fi
 
+${FPPDIR}/scripts/ManageApacheContentPolicy.sh add default-src "http://*:8089"
+
 # Source common scripts and set restart flag
 if [ -f "${FPPDIR}/scripts/common" ]; then
     . "${FPPDIR}/scripts/common"
