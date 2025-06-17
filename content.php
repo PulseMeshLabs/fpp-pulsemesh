@@ -25,7 +25,7 @@
         // Add restart button below iframe
         echo '<div style="margin-top: 10px;">';
         echo '<form method="post" style="display: inline;">';
-        echo '<button type="submit" name="restart_pulsemesh">Restart PulseMesh</button>';
+        echo '<button type="submit" name="restart_pulsemesh" style="background-color: #007bff; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-size: 14px;">Restart PulseMesh</button>';
         echo '</form>';
         echo '</div>';
         
