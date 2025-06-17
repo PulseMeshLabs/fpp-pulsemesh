@@ -6,7 +6,7 @@
         
         // Handle restart button click
         if (isset($_POST['restart_pulsemesh'])) {
-            $command = 'sudo /home/fpp/media/plugins/fpp-PulseMesh/scripts/restart_pulsemesh.sh 2>&1';
+            $command = 'sudo /home/fpp/media/plugins/fpp-PulseMesh/scripts/restart_pulsemesh.sh --force 2>&1';
             $output = [];
             $return_var = 0;
             exec($command, $output, $return_var);
