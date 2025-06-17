@@ -58,7 +58,12 @@ else
     echo "Warning: start_pulsemesh.sh not found or not executable"
 fi
 
-${FPPDIR}/scripts/ManageApacheContentPolicy.sh add default-src "http://*:8089"
+# Add CSP for loading PulseMesh config page for FPP 9+
+if [ -f "${FPPDIR}/scripts/ManageApacheContentPolicy.sh" ]; then
+    ${FPPDIR}/scripts/ManageApacheContentPolicy.sh add default-src "http://*:8089"
+else
+    echo "Skipping CSP addition: ManageApacheContentPolicy.sh not found"
+fi
 
 # Source common scripts and set restart flag
 if [ -f "${FPPDIR}/scripts/common" ]; then
