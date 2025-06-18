@@ -109,7 +109,7 @@ stop_service_graceful() {
 stop_service_force() {
     local pid="$1"
     
-    log_warn "Attempting forceful shutdown (SIGKILL)..."
+    log_info "Attempting forceful shutdown (SIGKILL)..."
     
     if ! kill -KILL "$pid" 2>/dev/null; then
         log_error "Failed to send SIGKILL to process $pid"
@@ -229,7 +229,7 @@ show_status() {
 
 # Function to kill all processes by name (nuclear option)
 kill_all() {
-    log_warn "Attempting to kill all processes matching '$BINARY_NAME'..."
+    log_info "Attempting to kill all processes matching '$BINARY_NAME'..."
     
     if command -v pkill >/dev/null 2>&1; then
         if pkill -f "$BINARY_NAME"; then
