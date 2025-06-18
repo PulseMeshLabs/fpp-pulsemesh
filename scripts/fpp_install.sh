@@ -58,12 +58,16 @@ else
     echo "Warning: start_pulsemesh.sh not found or not executable"
 fi
 
-# Add CSP for loading PulseMesh config page for FPP 9+
-if [ -f "${FPPDIR}/scripts/ManageApacheContentPolicy.sh" ]; then
-    ${FPPDIR}/scripts/ManageApacheContentPolicy.sh add default-src "http://*:8089"
-    ${FPPDIR}/scripts/ManageApacheContentPolicy.sh add default-src "https://*:8089"
+# Add CSP for loading PulseMesh config page for FPP 9+ (skip if running in Docker)
+if [ ! -f "/.dockerenv" ]; then
+    if [ -f "${FPPDIR}/scripts/ManageApacheContentPolicy.sh" ]; then
+        ${FPPDIR}/scripts/ManageApacheContentPolicy.sh add default-src "http://*:8089"
+        ${FPPDIR}/scripts/ManageApacheContentPolicy.sh add default-src "https://*:8089"
+    else
+        echo "Skipping CSP addition: ManageApacheContentPolicy.sh not found (FPP version < 9)"
+    fi
 else
-    echo "Skipping CSP addition: ManageApacheContentPolicy.sh not found"
+    echo "Skipping CSP addition: Running in Docker environment and CSP is not currently supported"
 fi
 
 # Source common scripts and set restart flag
