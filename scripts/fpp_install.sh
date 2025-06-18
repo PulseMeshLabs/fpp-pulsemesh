@@ -11,25 +11,27 @@ cd ..
 
 make "SRCDIR=${SRCDIR}"
 
-# Run cleanup commands - continue even if they fail
-echo "Cleaning up possible existing pulsemesh-connector installation..."
+# Run cleanup commands if legacy install is present
+if [ -f "/usr/local/bin/pulsemesh-connector" ]; then
+    echo "Cleaning up possible existing pulsemesh-connector installation..."
 
-sudo systemctl --now disable pulsemesh-connector.service 2>/dev/null || {
-    echo "Didn't disable pulsemesh-connector.service (may not exist, this is OK)"
-}
+    sudo systemctl --now disable pulsemesh-connector.service 2>/dev/null || {
+        echo "Didn't disable pulsemesh-connector.service (may not exist, this is OK)"
+    }
 
-sudo apt-get purge -y pulsemesh-connector 2>/dev/null || {
-    echo "Didn't purge pulsemesh-connector package (may not be installed, this is OK)"
-}
+    sudo apt-get purge -y pulsemesh-connector 2>/dev/null || {
+        echo "Didn't purge pulsemesh-connector package (may not be installed, this is OK)"
+    }
 
-sudo rm -f /etc/apt/sources.list.d/pulsemsh.list 2>/dev/null || {
-    echo "Didn't remove /etc/apt/sources.list.d/pulsemsh.list (may not exist, this is OK)"
-}
+    sudo rm -f /etc/apt/sources.list.d/pulsemsh.list 2>/dev/null || {
+        echo "Didn't remove /etc/apt/sources.list.d/pulsemsh.list (may not exist, this is OK)"
+    }
 
-echo "Cleanup completed."
+    echo "Cleanup completed."
+fi
 
 # Run pulsemesh scripts
-echo "Running pulsemesh scripts..."
+echo "Running pulsemesh install scripts..."
 
 if [ -x "${BASEDIR}/stop_pulsemesh.sh" ]; then
     echo "Stopping pulsemesh..."
@@ -43,19 +45,23 @@ fi
 if [ -x "${BASEDIR}/update_pulsemesh.sh" ]; then
     echo "Updating pulsemesh..."
     "${BASEDIR}/update_pulsemesh.sh" || {
-        echo "Warning: update_pulsemesh.sh failed with exit code $?"
+        echo "Error: update_pulsemesh.sh failed with exit code $?" 
+        exit 1
     }
 else
-    echo "Warning: update_pulsemesh.sh not found or not executable"
+    echo "Error: update_pulsemesh.sh not found or not executable"
+    exit 1
 fi
 
 if [ -x "${BASEDIR}/start_pulsemesh.sh" ]; then
     echo "Starting pulsemesh..."
     "${BASEDIR}/start_pulsemesh.sh" || {
-        echo "Warning: start_pulsemesh.sh failed with exit code $?"
+        echo "Error: start_pulsemesh.sh failed with exit code $?"
+        exit 1
     }
 else
-    echo "Warning: start_pulsemesh.sh not found or not executable"
+    echo "Error: start_pulsemesh.sh not found or not executable"
+    exit 1
 fi
 
 # Add CSP for loading PulseMesh config page for FPP 9+ (skip if running in Docker)
