@@ -2,7 +2,7 @@
   "repoName": "fpp-PulseMesh",
   "name": "PulseMesh Connector",
   "author": "PulseMesh Labs",
-  "description": "Listen to your display audio from your phone.  Learn more at https://pulsemesh.io",
+  "description": "Allow visitors to listen to your synchronized display audio from their phones.  Learn more at https://pulsemesh.io",
   "homeURL": "https://github.com/PulseMeshLabs/fpp-pulsemesh",
   "srcURL": "https://github.com/PulseMeshLabs/fpp-pulsemesh.git",
   "bugURL": "https://github.com/PulseMeshLabs/fpp-pulsemesh/issues",
@@ -10,21 +10,21 @@
     {
       "minFPPVersion": "7.0",
       "maxFPPVersion": "7.99",
-      "branch": "fpp_v9",
+      "branch": "main",
       "sha": "",
       "allowUpdates": 1
     },
     {
       "minFPPVersion": "8.0",
       "maxFPPVersion": "8.99",
-      "branch": "fpp_v9",
+      "branch": "main",
       "sha": "",
       "allowUpdates": 1
     },
     {
       "minFPPVersion": "9.0",
       "maxFPPVersion": "0",
-      "branch": "fpp_v9",
+      "branch": "main",
       "sha": "",
       "allowUpdates": 1
     }
