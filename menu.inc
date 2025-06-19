@@ -13,7 +13,7 @@
 
 $menuEntries = Array(
 	Array(
-		'text' => 'PulseMesh Configuration',
+		'text' => 'PulseMesh',
 		'type' => 'content',
 		'page' => 'content.php',
 		'wrap' => 1

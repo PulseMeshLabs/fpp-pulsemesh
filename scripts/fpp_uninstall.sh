@@ -1,13 +1,16 @@
 #!/bin/bash
 
-echo "Running pulsemesh-connector uninstall script"
+SCRIPT_DIR="$(dirname "$0")"
+$SCRIPT_DIR/stop_pulsemesh.sh
 
-if [ -f "/.dockerenv" ]; then
-    echo "Running in docker, skipping..."
+# Remove CSP for PulseMesh config page for FPP 9+ (skip if running in Docker)
+if [ ! -f "/.dockerenv" ]; then
+    if [ -f "${FPPDIR}/scripts/ManageApacheContentPolicy.sh" ]; then
+        ${FPPDIR}/scripts/ManageApacheContentPolicy.sh remove default-src "http://*:8089"
+        ${FPPDIR}/scripts/ManageApacheContentPolicy.sh remove default-src "https://*:8089"
+    else
+        echo "Skipping CSP removal: ManageApacheContentPolicy.sh not found (FPP version < 9)"
+    fi
 else
-    sudo systemctl --now disable pulsemesh-connector.service
-    sudo apt-get purge -y pulsemesh-connector
-    sudo rm /etc/apt/sources.list.d/pulsemsh.list
-
-    echo "Removed pulsemesh-connector"
+    echo "Skipping CSP removal: Running in Docker environment and CSP is not currently supported"
 fi
