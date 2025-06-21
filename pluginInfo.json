@@ -15,8 +15,8 @@
       "allowUpdates": 1
     },
     {
-      "minFPPVersion": "8.0",
-      "maxFPPVersion": "8.5.1",
+      "minFPPVersion": "8.0.0",
+      "maxFPPVersion": "8.99.99",
       "branch": "main",
       "sha": "",
       "allowUpdates": 1
