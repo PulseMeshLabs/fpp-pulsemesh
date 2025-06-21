@@ -7,26 +7,26 @@
   "srcURL": "https://github.com/PulseMeshLabs/fpp-pulsemesh.git",
   "bugURL": "https://github.com/PulseMeshLabs/fpp-pulsemesh/issues",
   "versions": [
-      {
-      "minFPPVersion": "7.0",
-      "maxFPPVersion": "7.99",
-      "branch":        "main",
-      "sha":           "",
-      "allowUpdates":  1
-    },
-    {
-      "minFPPVersion": "8.0",
-      "maxFPPVersion": "9.999",
-      "branch":        "main",
-      "sha":           "",
-      "allowUpdates":  1
-    },
-    {
-      "minFPPVersion": "9.0",
-      "maxFPPVersion": "0",
-      "branch":        "main",
-      "sha":           "",
-      "allowUpdates":  1
-    }
-  ]
+  {
+    "minFPPVersion": "7.0",
+    "maxFPPVersion": "7.99",
+    "branch": "main",
+    "sha": "",
+    "allowUpdates": 1
+  },
+  {
+    "minFPPVersion": "8.0",
+    "maxFPPVersion": "8.999",
+    "branch": "main",
+    "sha": "",
+    "allowUpdates": 1
+  },
+  {
+    "minFPPVersion": "9.0",
+    "maxFPPVersion": "0",
+    "branch": "main",
+    "sha": "",
+    "allowUpdates": 1
+  }
+]
 }
