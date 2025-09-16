@@ -1,9 +1,5 @@
 <div id="global" class="settings">
 <?
-        $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? "https://" : "http://";
-        $host = $_SERVER['SERVER_NAME'] ?? 'localhost';
-        $url = $protocol . $host . ":8089";
-        
         // Handle restart button click
         if (isset($_POST['restart_pulsemesh'])) {
             $command = 'sudo /home/fpp/media/plugins/fpp-PulseMesh/scripts/restart_pulsemesh.sh --force 2>&1';
@@ -20,7 +16,7 @@
         }
         
         echo '<div>';
-        echo '<iframe src="' . htmlspecialchars($url) . '" width="100%" height="1000" frameborder="0" style="border: 1px solid #ccc; border-radius: 8px;"></iframe>';
+        echo '<iframe id="pulsemesh-iframe" width="100%" height="1000" frameborder="0" style="border: 1px solid #ccc; border-radius: 8px;"></iframe>';
         
         // Add restart button below iframe
         echo '<div style="margin-top: 10px;">';
@@ -30,5 +26,23 @@
         echo '</div>';
         
         echo '</div>';
+        
+        // Add JavaScript to dynamically set iframe source using browser's current location
+        echo '<script>
+        document.addEventListener("DOMContentLoaded", function() {
+            // Get the current protocol and hostname from the browser URL
+            var protocol = window.location.protocol;
+            var hostname = window.location.hostname;
+            
+            // Construct the PulseMesh URL using the same host the user is accessing
+            var pulsemeshUrl = protocol + "//" + hostname + ":8089";
+            
+            // Set the iframe source
+            var iframe = document.getElementById("pulsemesh-iframe");
+            if (iframe) {
+                iframe.src = pulsemeshUrl;
+            }
+        });
+        </script>';
 ?>
 </div>
