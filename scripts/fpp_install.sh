@@ -66,8 +66,15 @@ fi
 
 # Add CSP for loading PulseMesh config page for FPP 9+
 if [ -f "${FPPDIR}/scripts/ManageApacheContentPolicy.sh" ]; then
-    ${FPPDIR}/scripts/ManageApacheContentPolicy.sh add default-src "http://*:8089"
-    ${FPPDIR}/scripts/ManageApacheContentPolicy.sh add default-src "https://*:8089"
+    if [ -f "/.dockerenv" ]; then
+        # In Docker, the script may return non-zero but we continue anyway
+        ${FPPDIR}/scripts/ManageApacheContentPolicy.sh add default-src "http://*:8089" || true
+        ${FPPDIR}/scripts/ManageApacheContentPolicy.sh add default-src "https://*:8089" || true
+        echo "CSP addition attempted in Docker environment (errors expected and ignored)"
+    else
+        ${FPPDIR}/scripts/ManageApacheContentPolicy.sh add default-src "http://*:8089"
+        ${FPPDIR}/scripts/ManageApacheContentPolicy.sh add default-src "https://*:8089"
+    fi
 else
     echo "Skipping CSP addition: ManageApacheContentPolicy.sh not found (FPP version < 9)"
 fi
