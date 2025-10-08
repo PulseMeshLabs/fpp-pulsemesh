@@ -93,28 +93,24 @@ public:
 
     virtual void SendMediaOpenPacket(const std::string &filename) override
     {
-        if (!m_socketInitialized) return;
         std::string message = "SendMediaOpenPacket/" + filename;
         writeToSocket(message);
     }
 
     virtual void SendMediaSyncStartPacket(const std::string &filename) override
     {
-        if (!m_socketInitialized) return;
         std::string message = "SendMediaSyncStartPacket/" + filename;
         writeToSocket(message);
     }
 
     virtual void SendMediaSyncStopPacket(const std::string &filename) override
     {
-        if (!m_socketInitialized) return;
         std::string message = "SendMediaSyncStopPacket/" + filename;
         writeToSocket(message);
     }
 
     virtual void SendMediaSyncPacket(const std::string &filename, float seconds) override
     {
-        if (!m_socketInitialized) return;
         int curTS = static_cast<int>(seconds * 2.0f);
         {
             std::lock_guard<std::mutex> lock(m_mutex);
