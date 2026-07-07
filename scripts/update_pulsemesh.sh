@@ -6,13 +6,43 @@
 set -euo pipefail  # Exit on error, undefined vars, pipe failures
 
 # Configuration
-VERSION_URL="https://pulsemesh.io/connectorapi/release/version"
-DOWNLOAD_BASE_URL="https://pulsemesh.io/connectorapi/release/download/linux"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BINARY_DIR="$(dirname "$SCRIPT_DIR")"
-VERSION_FILE="$BINARY_DIR/pulsemesh_version.txt"
 BINARY_NAME="pulsemesh-connector"
 BINARY_PATH="$BINARY_DIR/$BINARY_NAME"
+
+# Shared config file (read by the plugin and both connector binaries). A
+# top-level `V2 = 1` key selects the v2 (Rust) artifact instead of the
+# legacy Go one. See pulsemesh-connector-rs/docs/fpp-install.md.
+CONFIG_FILE="/home/fpp/media/config/plugin.fpp-pulsemesh"
+
+# Legacy (Go) artifact endpoints and version file (defaults).
+VERSION_URL="https://pulsemesh.io/connectorapi/release/version"
+DOWNLOAD_BASE_URL="https://pulsemesh.io/connectorapi/release/download/linux"
+VERSION_FILE="$BINARY_DIR/pulsemesh_version.txt"
+
+# Function to read the top-level V2 flag from the shared config file.
+# Tolerant parse: accepts `V2 = 1`, `V2=1`, leading spaces, and either
+# case of the key. Only the top-level key is read; the `[v2]` section that
+# the v2 binary consumes is left untouched. Echoes "1" when enabled, "" otherwise.
+get_v2_flag() {
+    if [[ -f "$CONFIG_FILE" ]]; then
+        sed -n 's/^[[:space:]]*[Vv]2[[:space:]]*=[[:space:]]*//p' "$CONFIG_FILE" 2>/dev/null \
+            | head -1 | tr -d '[:space:]'
+    fi
+}
+
+# Select the v2 artifact endpoints and a SEPARATE version file when the flag
+# is set. Using a distinct version file (pulsemesh_version_v2.txt vs
+# pulsemesh_version.txt) guarantees that flipping the flag in EITHER direction
+# always mismatches the recorded version and forces a fresh download of the
+# correct binary, rather than trusting a stale version match from the other track.
+V2_FLAG="$(get_v2_flag)"
+if [[ "$V2_FLAG" == "1" ]]; then
+    VERSION_URL="https://pulsemesh.io/connectorapi/release-v2/version"
+    DOWNLOAD_BASE_URL="https://pulsemesh.io/connectorapi/release-v2/download/linux"
+    VERSION_FILE="$BINARY_DIR/pulsemesh_version_v2.txt"
+fi
 
 # Colors for output
 RED='\033[0;31m'
@@ -183,7 +213,14 @@ update_version_file() {
 # Main function
 main() {
     log_info "Starting PulseMesh Connector update check..."
-    
+
+    if [[ "$V2_FLAG" == "1" ]]; then
+        log_info "V2 flag is set — selecting v2 (Rust) connector artifact."
+    else
+        log_info "V2 flag is not set — selecting legacy (Go) connector artifact."
+    fi
+    log_info "Version file: $VERSION_FILE"
+
     # Get remote version
     log_info "Checking remote version..."
     local remote_version
