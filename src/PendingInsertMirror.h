@@ -152,10 +152,13 @@ public:
         if (immediate) {
             /* Never rests at pending: fppd pauses the current item synchronously
              * and Process() consumes the slot at its next tick (:812).  If the
-             * inserted playlist fails to start, the silent-cleanup branch leaves
-             * the original item PAUSED — and a paused player emits no boundary
-             * events, so a mirror resting at pending/exact would be stale
-             * forever and §13.2's replace-repair would double-insert. */
+             * inserted playlist fails to start, that tick produces NO event this
+             * machine can see — SetIdle's `stop` callback carries GetInfo() of
+             * an already-idle object, so its name field is EMPTY — and a mirror
+             * resting at pending/exact would be stale forever while §13.2's
+             * replace-repair double-inserted on it.  Measured on the rig
+             * 2026-07-28: fppd's own recovery is to Resume() the item it paused,
+             * so the show carries on and the ONLY evidence is this timeout. */
             m_state = MirrorState::AwaitingStart;
             m_deadlineMs = nowMs + m_config.immediateStartTimeoutMs;
         } else {
@@ -165,16 +168,20 @@ public:
     }
 
     /* From FPPPlugins::PlaylistEventPlugin::playlistCallback.  `playlist` is
-     * GetInfo()["name"]. */
-    void onPlaylistEvent(const std::string& playlist, PlaylistAction action, int64_t nowMs) {
+     * GetInfo()["name"] and `size` is GetInfo()["size"]; pass a negative size
+     * when the field was absent or unreadable, which reads as "no discriminator
+     * available" rather than as a mismatch. */
+    void onPlaylistEvent(const std::string& playlist, PlaylistAction action, int size,
+                         int64_t nowMs) {
         const bool namesSlot = m_hasPending && playlist == m_pending.playlist;
+        const bool ownStart = namesSlot && action == PlaylistAction::Start && sizeFitsRange(size);
 
         if (m_state == MirrorState::AwaitingStart) {
             /* Resolves exactly two ways: the start, or the timeout.  Nothing
-             * else is evidence — the failure branch is EVENTLESS by
-             * construction, so an unrelated event here means only that
-             * something else happened, never that the insert did or did not. */
-            if (namesSlot && action == PlaylistAction::Start) {
+             * else is evidence — the failure branch emits nothing this machine
+             * can see — so an unrelated event here means only that something
+             * else happened, never that the insert did or did not. */
+            if (ownStart) {
                 resolve(Resolution::ImmediatePlayed, nowMs);
             } else {
                 settle(nowMs);
@@ -184,7 +191,7 @@ public:
 
         if (m_state == MirrorState::Announced || m_state == MirrorState::Pending ||
             m_state == MirrorState::UnresolvedPending) {
-            if (namesSlot && action == PlaylistAction::Start) {
+            if (ownStart) {
                 /* The insert's OWN start — the only event in fppd that proves
                  * consumption, because SwitchToInsertedPlaylist is the only site
                  * that clears the slot and this callback is its success path.
@@ -262,6 +269,31 @@ private:
      * second copy was dead: a probe deleting it changed no output, because
      * this list already excluded it.  A check no test misses when it is
      * deleted is not a check; it is where the two copies drift apart. */
+    /* Does a `start` NAMING the slot playlist, reporting this size, look like
+     * the inserted RANGE starting — as opposed to the whole playlist being
+     * started afresh?
+     *
+     * `Playlist::Load` trims its copy to the requested range (:186-215,
+     * `if (startPos < playlist.size())` plus `maxEntries`), so the inserted
+     * object reports EXACTLY the range's length while a fresh start of the same
+     * playlist reports all of it.  Without this the two events are identical,
+     * and the rig proved it costs a false `exact`: an announcement left
+     * `unresolved_pending` by a boundary that skipped it was retired as
+     * `consumed` the moment an operator started the same playlist again —
+     * "the insert played" said about an insert fppd had thrown away.
+     *
+     * §13.2 always inserts one item (`index + 1` twice), so the discriminator
+     * is always available where it matters.  An open-ended or whole-playlist
+     * range has no discriminator, and a missing `size` field is not a
+     * mismatch: both accept, because a false `unresolved` costs one declined
+     * repair and a false `consumed` is a lie. */
+    bool sizeFitsRange(int size) const {
+        if (size < 0 || m_pending.position < 0 || m_pending.endPosition < m_pending.position) {
+            return true;
+        }
+        return size == m_pending.endPosition - m_pending.position + 1;
+    }
+
     static bool isBoundaryPassing(PlaylistAction action) {
         return action == PlaylistAction::Start || action == PlaylistAction::Playing ||
                action == PlaylistAction::Stop;

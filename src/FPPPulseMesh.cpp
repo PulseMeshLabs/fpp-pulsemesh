@@ -119,12 +119,22 @@ public:
         // The mirror is fed BEFORE the size>1 filter below.  An inserted
         // single-item range is trimmed by Playlist::Load, so the inserted
         // playlist reports size 1 — the exact event the mirror needs to see a
-        // consumption is the one that filter drops.
+        // consumption is the one that filter drops.  It is also the mirror's
+        // discriminator between that start and a fresh start of the same
+        // playlist, so a MISSING size is passed on as -1 rather than as this
+        // function's early return: the mirror's own rule for "no discriminator"
+        // is more careful than not being told at all.
         if (playlist.isMember("name") && playlist["name"].isString())
         {
+            int mirrorSize = -1;
+            if (playlist.isMember("size") && playlist["size"].isInt())
+            {
+                mirrorSize = playlist["size"].asInt();
+            }
             std::lock_guard<std::mutex> lock(m_mirrorMutex);
             m_mirror.onPlaylistEvent(playlist["name"].asString(),
-                                     pulsemesh::actionFromString(action), monotonicMs());
+                                     pulsemesh::actionFromString(action), mirrorSize,
+                                     monotonicMs());
         }
 
         if (playlist.isMember("size") && playlist["size"].isInt())

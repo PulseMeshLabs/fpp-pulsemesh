@@ -57,6 +57,18 @@ else:
             fail("the mirror is fed AFTER playlistCallback's first early return")
         if size_filter is not None and feed > size_filter:
             fail("the mirror is fed AFTER the size>1 filter that drops a 1-item insert")
+        # The size is the machine's ONLY discriminator between the inserted
+        # range starting and the whole playlist being started afresh — the rig
+        # showed that without it an operator's `Start Playlist` retires a live
+        # announcement as `consumed`, at confidence `exact`. Nothing a compiler
+        # or a host test can see: `onPlaylistEvent` takes an int either way, and
+        # the tests call it directly. So it is checked here, structurally.
+        before_feed = "\n".join(lines[cb_start:feed])
+        call = "\n".join(lines[feed:min(feed + 4, cb_end or len(lines))])
+        if not re.search(r'playlist\["size"\]\.asInt\(\)', before_feed):
+            fail("the mirror feed does not READ size from the callback's JSON")
+        if re.search(r"onPlaylistEvent\(.*?,\s*-1\s*,", call, re.S):
+            fail("the mirror is fed a hardcoded size, not the reported one")
 
 # ---------------------------------------------------------------------------
 # 2. The route is not served on a build that cannot feed it.

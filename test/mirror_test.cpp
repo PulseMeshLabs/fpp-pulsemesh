@@ -54,7 +54,7 @@ static void idleNonImmediateNeverRestsPending() {
     CHECK_STATE(v, "announced");
     CHECK_CONF(v, "unresolved");
 
-    m.onPlaylistEvent("Show RF", PlaylistAction::Start, 1000);
+    m.onPlaylistEvent("Show RF", PlaylistAction::Start, 1, 1000);
     v = m.view(1000);
     CHECK_STATE(v, "empty");
     CHECK_CONF(v, "exact");
@@ -67,7 +67,7 @@ static void idleImmediateResolvesTheSameWay() {
     PendingInsertMirror m(1000);
     m.onInserted("Show RF", 3, 3, true, 1000);
     CHECK_STATE(m.view(1000), "awaiting_start");
-    m.onPlaylistEvent("Show RF", PlaylistAction::Start, 1000);
+    m.onPlaylistEvent("Show RF", PlaylistAction::Start, 1, 1000);
     auto v = m.view(1000);
     CHECK_STATE(v, "empty");
     CHECK_RES(v, "immediate_played");
@@ -94,8 +94,8 @@ static void pendingIsConsumedByItsOwnStart() {
     CASE("pending + start naming it = SwitchToInsertedPlaylist's success path");
     PendingInsertMirror m(1000);
     m.onInserted("Show RF", 5, 5, false, 1000);
-    m.onPlaylistEvent("Show RF", PlaylistAction::QueryNext, 60000);
-    m.onPlaylistEvent("Show RF", PlaylistAction::Start, 60001);
+    m.onPlaylistEvent("Show RF", PlaylistAction::QueryNext, 6, 60000);
+    m.onPlaylistEvent("Show RF", PlaylistAction::Start, 1, 60001);
     auto v = m.view(60001);
     CHECK_STATE(v, "empty");
     CHECK_RES(v, "consumed");
@@ -106,7 +106,7 @@ static void queryNextIsNotABoundary() {
     CASE("query_next fires BEFORE the switch is attempted (:825 vs :850)");
     PendingInsertMirror m(1000);
     m.onInserted("Show RF", 5, 5, false, 1000);
-    m.onPlaylistEvent("Show", PlaylistAction::QueryNext, 60000);
+    m.onPlaylistEvent("Show", PlaylistAction::QueryNext, 6, 60000);
     auto v = m.view(60000);
     CHECK_STATE(v, "pending");
     CHECK_CONF(v, "exact");
@@ -125,7 +125,7 @@ static void boundaryWithoutTheStartDoesNotRetireTheAnnouncement() {
      * unattributed. */
     PendingInsertMirror m(1000);
     m.onInserted("Show RF", 5, 5, false, 1000);
-    m.onPlaylistEvent("Show", PlaylistAction::Playing, 60000);
+    m.onPlaylistEvent("Show", PlaylistAction::Playing, 6, 60000);
     auto v = m.view(60000);
     CHECK_STATE(v, "unresolved_pending");
     CHECK_CONF(v, "unresolved");
@@ -145,7 +145,7 @@ static void playingNamingTheSlotIsTheParentMovingOn() {
      * start would report a play that never happened. */
     PendingInsertMirror m(1000);
     m.onInserted("Show RF", 5, 5, false, 1000);
-    m.onPlaylistEvent("Show RF", PlaylistAction::Playing, 60000);
+    m.onPlaylistEvent("Show RF", PlaylistAction::Playing, 6, 60000);
     auto v = m.view(60000);
     CHECK_STATE(v, "unresolved_pending");
     CHECK_CONF(v, "unresolved");
@@ -155,7 +155,7 @@ static void aStopDoesNotDisarmTheSlot() {
     CASE("stop while pending — Cleanup() never touches the slot");
     PendingInsertMirror m(1000);
     m.onInserted("Show RF", 5, 5, false, 1000);
-    m.onPlaylistEvent("Show", PlaylistAction::Stop, 60000);
+    m.onPlaylistEvent("Show", PlaylistAction::Stop, 0, 60000);
     CHECK_STATE(m.view(60000), "unresolved_pending");
 }
 
@@ -163,7 +163,7 @@ static void aDifferentPlaylistStartingIsABoundaryPassed() {
     CASE("start naming a different playlist while pending");
     PendingInsertMirror m(1000);
     m.onInserted("Show RF", 5, 5, false, 1000);
-    m.onPlaylistEvent("Christmas", PlaylistAction::Start, 60000);
+    m.onPlaylistEvent("Christmas", PlaylistAction::Start, 4, 60000);
     CHECK_STATE(m.view(60000), "unresolved_pending");
 }
 
@@ -171,20 +171,78 @@ static void aLateStartStillProvesConsumption() {
     CASE("an insert skipped past still fires at the next REAL boundary");
     PendingInsertMirror m(1000);
     m.onInserted("Show RF", 5, 5, false, 1000);
-    m.onPlaylistEvent("Show RF", PlaylistAction::Playing, 60000); // operator skip
+    m.onPlaylistEvent("Show RF", PlaylistAction::Playing, 6, 60000); // operator skip
     CHECK_STATE(m.view(60000), "unresolved_pending");
-    m.onPlaylistEvent("Show RF", PlaylistAction::Start, 250000); // the real boundary
+    m.onPlaylistEvent("Show RF", PlaylistAction::Start, 1, 250000); // the real boundary
     auto v = m.view(250000);
     CHECK_STATE(v, "empty");
     CHECK_RES(v, "consumed");
     CHECK_CONF(v, "exact");
 }
 
+static void aFreshStartOfTheSamePlaylistIsNotTheInsertsOwnStart() {
+    CASE("an operator restarting the pool playlist never retires the insert");
+    /* MEASURED on the 8.5.1 rig, 2026-07-28.  An announcement left
+     * unresolved_pending by a skipped boundary was retired as `consumed` the
+     * instant a `Start Playlist` command re-started the same playlist —
+     * "the insert played" said about an insert fppd had thrown away, at
+     * confidence `exact`.  The discriminator is the size: Playlist::Load
+     * TRIMS its copy to the requested range, so the inserted object reports
+     * the range's length and a whole-playlist start reports all of it. */
+    PendingInsertMirror m(1000);
+    m.onInserted("Show RF", 5, 5, false, 1000);
+    m.onPlaylistEvent("Show RF", PlaylistAction::Playing, 6, 60000); // operator skip
+    CHECK_STATE(m.view(60000), "unresolved_pending");
+    m.onPlaylistEvent("Show RF", PlaylistAction::Start, 6, 70000); // Start Playlist
+    auto v = m.view(70000);
+    CHECK_STATE(v, "unresolved_pending");
+    CHECK_CONF(v, "unresolved");
+    CHECK(v.pending.position == 5);
+}
+
+static void aFreshStartDoesNotResolveAnImmediateEither() {
+    CASE("the awaiting_start window is not satisfied by a whole-playlist start");
+    PendingInsertMirror m(1000);
+    m.onInserted("Show RF", 5, 5, true, 1000);
+    m.onPlaylistEvent("Show RF", PlaylistAction::Start, 6, 1200);
+    CHECK_STATE(m.view(1200), "awaiting_start");
+    auto v = m.view(3001); // the timeout, not the start, is what decides
+    CHECK_STATE(v, "empty");
+    CHECK_RES(v, "unresolved");
+    CHECK_CONF(v, "unresolved");
+}
+
+static void anUnknownSizeIsNotTreatedAsAMismatch() {
+    CASE("a missing size field declines to discriminate rather than refusing");
+    /* Rule (c) of the asymmetry: a false `unresolved` costs one declined
+     * repair, a false `consumed` is a lie — but refusing every start on a
+     * build that stopped reporting `size` would strand every announcement. */
+    PendingInsertMirror m(1000);
+    m.onInserted("Show RF", 5, 5, false, 1000);
+    CHECK_STATE(m.view(60000), "pending"); // settled: this is a boundary, not the idle branch
+    m.onPlaylistEvent("Show RF", PlaylistAction::Start, -1, 60000);
+    auto v = m.view(60000);
+    CHECK_STATE(v, "empty");
+    CHECK_RES(v, "consumed");
+}
+
+static void aWholePlaylistInsertHasNoDiscriminator() {
+    CASE("an open range accepts the start it cannot check");
+    /* position -1 is §22.1's whole-playlist insert: nothing is trimmed, so the
+     * inserted object's size IS the playlist's size and the two events are
+     * genuinely identical.  Accepting is the same asymmetry as above. */
+    PendingInsertMirror m(1000);
+    m.onInserted("Show RF", -1, -1, false, 1000);
+    CHECK_STATE(m.view(60000), "pending");
+    m.onPlaylistEvent("Show RF", PlaylistAction::Start, 6, 60000);
+    CHECK_RES(m.view(60000), "consumed");
+}
+
 static void anUnresolvedPendingIsStillOverwritable() {
     CASE("a later insert supersedes an unresolved_pending");
     PendingInsertMirror m(1000);
     m.onInserted("Show RF", 5, 5, false, 1000);
-    m.onPlaylistEvent("Show", PlaylistAction::Stop, 60000);
+    m.onPlaylistEvent("Show", PlaylistAction::Stop, 0, 60000);
     m.onInserted("Show RF", 6, 6, false, 61000);
     auto v = m.view(61250);
     CHECK_RES(v, "superseded");
@@ -226,14 +284,14 @@ static void awaitingStartResolvesOnlyTwoWays() {
     CASE("awaiting_start ignores unrelated events — the failure is EVENTLESS");
     PendingInsertMirror m(1000);
     m.onInserted("Show RF", 5, 5, true, 1000);
-    m.onPlaylistEvent("Show", PlaylistAction::Playing, 1100);
-    m.onPlaylistEvent("Show", PlaylistAction::QueryNext, 1200);
-    m.onPlaylistEvent("Christmas", PlaylistAction::Start, 1300);
+    m.onPlaylistEvent("Show", PlaylistAction::Playing, 6, 1100);
+    m.onPlaylistEvent("Show", PlaylistAction::QueryNext, 6, 1200);
+    m.onPlaylistEvent("Christmas", PlaylistAction::Start, 4, 1300);
     auto v = m.view(1400);
     CHECK_STATE(v, "awaiting_start");
     CHECK_CONF(v, "unresolved");
     /* ...and the start still resolves it. */
-    m.onPlaylistEvent("Show RF", PlaylistAction::Start, 2999);
+    m.onPlaylistEvent("Show RF", PlaylistAction::Start, 1, 2999);
     v = m.view(2999);
     CHECK_RES(v, "immediate_played");
     CHECK_CONF(v, "exact");
@@ -271,7 +329,7 @@ static void aCleanAnnouncementRestoresExact() {
     auto v = m.view(4250);
     CHECK_STATE(v, "pending");
     CHECK_CONF(v, "exact");
-    m.onPlaylistEvent("Show RF", PlaylistAction::Start, 5000);
+    m.onPlaylistEvent("Show RF", PlaylistAction::Start, 1, 5000);
     CHECK_CONF(m.view(5000), "exact");
     CHECK_RES(m.view(5000), "consumed");
 }
@@ -323,7 +381,7 @@ static void jsonCarriesTheContract() {
     CHECK(j.find("\"seq\":1") != std::string::npos);
     CHECK(j.find("last_resolution") == std::string::npos);
 
-    m.onPlaylistEvent("Show RF", PlaylistAction::Start, 6000);
+    m.onPlaylistEvent("Show RF", PlaylistAction::Start, 3, 6000);
     j = toJson(m.view(6000), 6000);
     CHECK(j.find("\"state\":\"empty\"") != std::string::npos);
     CHECK(j.find("\"resolution\":\"consumed\"") != std::string::npos);
@@ -367,7 +425,7 @@ static void unknownActionsAreInert() {
     CASE("an action this machine does not know resolves nothing");
     PendingInsertMirror m(1000);
     m.onInserted("Show RF", 5, 5, false, 1000);
-    m.onPlaylistEvent("Show", PlaylistAction::Other, 60000);
+    m.onPlaylistEvent("Show", PlaylistAction::Other, 6, 60000);
     CHECK_STATE(m.view(60000), "pending");
     CHECK_RES(m.view(60000), "none");
 }
@@ -383,6 +441,10 @@ int main() {
     aStopDoesNotDisarmTheSlot();
     aDifferentPlaylistStartingIsABoundaryPassed();
     aLateStartStillProvesConsumption();
+    aFreshStartOfTheSamePlaylistIsNotTheInsertsOwnStart();
+    aFreshStartDoesNotResolveAnImmediateEither();
+    anUnknownSizeIsNotTreatedAsAMismatch();
+    aWholePlaylistInsertHasNoDiscriminator();
     anUnresolvedPendingIsStillOverwritable();
     aLaterInsertOverwrites();
     anImmediateInsertSupersedesAPending();
