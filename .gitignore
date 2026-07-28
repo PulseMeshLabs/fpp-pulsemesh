@@ -1,1 +1,5 @@
 .vscode/settings.json
+
+# host test binaries
+test/mirror_test
+test/*.dSYM/
