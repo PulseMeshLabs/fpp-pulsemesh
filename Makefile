@@ -22,7 +22,7 @@ CXXFLAGS_src/FPPPulseMesh.o += -DPM_HAVE_PLAYLIST_INSERTED=1
 endif
 
 
-%.o: %.cpp Makefile
+%.o: %.cpp Makefile $(wildcard src/*.h)
 	$(CCACHE) $(CC) $(CFLAGS) $(CXXFLAGS) $(CXXFLAGS_$@) -c $< -o $@
 
 libfpp-PulseMesh.$(SHLIB_EXT): $(OBJECTS_fpp_PulseMesh_so) $(SRCDIR)/libfpp.$(SHLIB_EXT)
