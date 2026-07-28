@@ -54,6 +54,20 @@ enum class MirrorState {
     Announced,     // inside the idle-settle window; pending's rules already apply
     Pending,       // settled: the slot verifiably sits until the next boundary
     AwaitingStart, // immediate-while-playing; resolves by start or timeout only
+    /* A boundary-passing event arrived without this insert's own start, and
+     * fppd MAY OR MAY NOT still hold the slot.  This state exists because the
+     * rig refuted the simpler reading.  In all of fppd the slot is cleared in
+     * exactly ONE place — `SwitchToInsertedPlaylist` (Playlist.cpp:1012),
+     * reached only from Process()'s paused check (:812) and its finished-entry
+     * paths (:842, :850).  Neither `Playlist::NextItem` (:1346) nor
+     * `Cleanup()` (:1080, which every stop runs) touches it.  So an operator
+     * skipping an item emits exactly the event the switch's silent-failure
+     * branch emits — a `playing` naming the parent — while leaving the insert
+     * armed to fire at the next real boundary.  Reporting `empty` there would
+     * tell §13.2 the directive failed, and then the song would play anyway:
+     * an UNATTRIBUTED enactment, which is the failure §12.11's matcher exists
+     * to prevent. */
+    UnresolvedPending,
 };
 
 enum class Confidence {
@@ -63,12 +77,17 @@ enum class Confidence {
 
 enum class Resolution {
     None,
-    ImmediatePlayed,    // the idle branch's synchronous Play (:1116 / :1127)
-    Consumed,           // SwitchToInsertedPlaylist's success path
-    Superseded,         // a later insert overwrote the slot (:1119 is unconditional)
-    ConsumedUnresolved, // a boundary passed without the insert's start (:1013-1019)
-    Unresolved,         // awaiting_start timed out: consumed-but-failed and
-                        // stuck-mid-pause are indistinguishable from events alone
+    ImmediatePlayed, // the idle branch's synchronous Play (:1116 / :1127)
+    Consumed,        // SwitchToInsertedPlaylist's success path
+    Superseded,      // a later insert overwrote the slot (:1119 is unconditional)
+    /* awaiting_start timed out.  Unlike the non-immediate case this one really
+     * IS over: the immediate branch pauses the current item, and Process()'s
+     * paused check (:812) calls SwitchToInsertedPlaylist unconditionally at its
+     * next tick, which clears the slot whether or not the playlist started.  So
+     * emptiness is certain here and only the PLAY is unknown — which is exactly
+     * what `unresolved` means and why the non-immediate path gets a state
+     * instead of a resolution. */
+    Unresolved,
 };
 
 struct Announcement {
@@ -163,25 +182,35 @@ public:
             return;
         }
 
-        if (m_state == MirrorState::Announced || m_state == MirrorState::Pending) {
+        if (m_state == MirrorState::Announced || m_state == MirrorState::Pending ||
+            m_state == MirrorState::UnresolvedPending) {
             if (namesSlot && action == PlaylistAction::Start) {
-                /* Inside the settle window this is the idle branch's synchronous
-                 * Play; after it, it is SwitchToInsertedPlaylist's success path.
-                 * Both mean the insert played; they differ only in WHEN. */
+                /* The insert's OWN start — the only event in fppd that proves
+                 * consumption, because SwitchToInsertedPlaylist is the only site
+                 * that clears the slot and this callback is its success path.
+                 * Inside the settle window it is instead the idle branch's
+                 * synchronous Play; the two differ only in WHEN.  Reachable from
+                 * UnresolvedPending too: a skipped boundary does not disarm the
+                 * slot, so the insert can still fire at the next real one, late
+                 * but true. */
                 resolve(m_state == MirrorState::Announced ? Resolution::ImmediatePlayed
                                                           : Resolution::Consumed,
                         nowMs);
                 return;
             }
             if (isBoundaryPassing(action)) {
-                /* A boundary passed without the insert's own start: the switch's
-                 * silent failure branch (:1013-1019) cleared the slot and the
-                 * inserted playlist never played.  Note a `playing` NAMING the
+                /* Something moved without this insert starting.  It may be the
+                 * switch's silent failure branch (:1013-1019), or an operator
+                 * skip or stop that never went near the switch — the two are
+                 * indistinguishable from events, and only one of them cleared
+                 * the slot.  So the announcement is NOT retired; it is marked
+                 * unknown and keeps its coordinates.  A `playing` NAMING the
                  * slot playlist lands here too, and must: that is the parent
                  * moving on (an object already playing emits "playing", not
                  * "start"), which is the §13.2 case of inserting the playlist
                  * that is already running. */
-                resolve(Resolution::ConsumedUnresolved, nowMs);
+                m_state = MirrorState::UnresolvedPending;
+                m_deadlineMs = 0;
                 return;
             }
         }
@@ -245,22 +274,25 @@ private:
             /* Still deciding.  §13.2's repair declines here, which costs at most
              * the settle window and never costs a double insert. */
             return Confidence::Unresolved;
+        case MirrorState::UnresolvedPending:
+            /* The coordinates are still reported, so §13.2 can SEE what was
+             * asked for — but not as an `exact` answer, because an overwrite
+             * aimed at a slot that may already be gone is a fresh insert, not a
+             * repair. */
+            return Confidence::Unresolved;
         case MirrorState::Pending:
             return Confidence::Exact;
         case MirrorState::Empty:
             break;
         }
-        switch (m_lastResolution.resolution) {
-        case Resolution::ConsumedUnresolved:
-        case Resolution::Unresolved:
-            /* The slot is empty either way — SwitchToInsertedPlaylist clears it
-             * before it checks IsPlaying — but whether the announced item PLAYED
-             * is unknown, and that is what the repair path would be deciding on.
+        if (m_lastResolution.resolution == Resolution::Unresolved) {
+            /* The slot IS empty — Process()'s paused check clears it whether or
+             * not the playlist started — but whether the announced item PLAYED
+             * is unknown, and that is what the repair path would decide on.
              * Downgrade to the declared-honesty path. */
             return Confidence::Unresolved;
-        default:
-            return Confidence::Exact;
         }
+        return Confidence::Exact;
     }
 
     MirrorConfig m_config;
@@ -279,6 +311,7 @@ inline const char* toString(MirrorState s) {
     case MirrorState::Announced: return "announced";
     case MirrorState::Pending: return "pending";
     case MirrorState::AwaitingStart: return "awaiting_start";
+    case MirrorState::UnresolvedPending: return "unresolved_pending";
     }
     return "empty";
 }
@@ -293,7 +326,6 @@ inline const char* toString(Resolution r) {
     case Resolution::ImmediatePlayed: return "immediate_played";
     case Resolution::Consumed: return "consumed";
     case Resolution::Superseded: return "superseded";
-    case Resolution::ConsumedUnresolved: return "consumed_unresolved";
     case Resolution::Unresolved: return "unresolved";
     }
     return "none";

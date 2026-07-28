@@ -113,17 +113,26 @@ static void queryNextIsNotABoundary() {
     CHECK_RES(v, "none");
 }
 
-static void boundaryWithoutTheStartIsConsumedUnresolved() {
-    CASE("boundary passed without the insert's start (:1013-1019)");
+static void boundaryWithoutTheStartDoesNotRetireTheAnnouncement() {
+    CASE("boundary without the insert's start: unknown, NOT over");
+    /* MEASURED ON THE RIG, 2026-07-28.  An earlier version resolved this to a
+     * terminal `consumed_unresolved` with an empty slot, and the box refuted
+     * it: `Playlist::NextItem` (:1346) emits exactly this event and never goes
+     * near SwitchToInsertedPlaylist — the only site in all of fppd that clears
+     * the slot (:1012).  Nor does `Cleanup()` (:1080), which every stop runs.
+     * So the insert stays armed and fires at the next real boundary; claiming
+     * it was over would make §13.2 report `failed` for a song that then plays,
+     * unattributed. */
     PendingInsertMirror m(1000);
     m.onInserted("Show RF", 5, 5, false, 1000);
     m.onPlaylistEvent("Show", PlaylistAction::Playing, 60000);
     auto v = m.view(60000);
-    CHECK_STATE(v, "empty");
-    CHECK_RES(v, "consumed_unresolved");
-    /* The slot is empty either way, but whether the item PLAYED is unknown —
-     * so the repair path must decline. */
+    CHECK_STATE(v, "unresolved_pending");
     CHECK_CONF(v, "unresolved");
+    CHECK_RES(v, "none");
+    /* The coordinates survive, so §13.2 can still see what was asked for. */
+    CHECK(v.hasPending);
+    CHECK(v.pending.position == 5);
 }
 
 static void playingNamingTheSlotIsTheParentMovingOn() {
@@ -138,17 +147,16 @@ static void playingNamingTheSlotIsTheParentMovingOn() {
     m.onInserted("Show RF", 5, 5, false, 1000);
     m.onPlaylistEvent("Show RF", PlaylistAction::Playing, 60000);
     auto v = m.view(60000);
-    CHECK_STATE(v, "empty");
-    CHECK_RES(v, "consumed_unresolved");
+    CHECK_STATE(v, "unresolved_pending");
     CHECK_CONF(v, "unresolved");
 }
 
-static void aStopIsABoundaryPassed() {
-    CASE("stop while pending");
+static void aStopDoesNotDisarmTheSlot() {
+    CASE("stop while pending — Cleanup() never touches the slot");
     PendingInsertMirror m(1000);
     m.onInserted("Show RF", 5, 5, false, 1000);
     m.onPlaylistEvent("Show", PlaylistAction::Stop, 60000);
-    CHECK_RES(m.view(60000), "consumed_unresolved");
+    CHECK_STATE(m.view(60000), "unresolved_pending");
 }
 
 static void aDifferentPlaylistStartingIsABoundaryPassed() {
@@ -156,7 +164,33 @@ static void aDifferentPlaylistStartingIsABoundaryPassed() {
     PendingInsertMirror m(1000);
     m.onInserted("Show RF", 5, 5, false, 1000);
     m.onPlaylistEvent("Christmas", PlaylistAction::Start, 60000);
-    CHECK_RES(m.view(60000), "consumed_unresolved");
+    CHECK_STATE(m.view(60000), "unresolved_pending");
+}
+
+static void aLateStartStillProvesConsumption() {
+    CASE("an insert skipped past still fires at the next REAL boundary");
+    PendingInsertMirror m(1000);
+    m.onInserted("Show RF", 5, 5, false, 1000);
+    m.onPlaylistEvent("Show RF", PlaylistAction::Playing, 60000); // operator skip
+    CHECK_STATE(m.view(60000), "unresolved_pending");
+    m.onPlaylistEvent("Show RF", PlaylistAction::Start, 250000); // the real boundary
+    auto v = m.view(250000);
+    CHECK_STATE(v, "empty");
+    CHECK_RES(v, "consumed");
+    CHECK_CONF(v, "exact");
+}
+
+static void anUnresolvedPendingIsStillOverwritable() {
+    CASE("a later insert supersedes an unresolved_pending");
+    PendingInsertMirror m(1000);
+    m.onInserted("Show RF", 5, 5, false, 1000);
+    m.onPlaylistEvent("Show", PlaylistAction::Stop, 60000);
+    m.onInserted("Show RF", 6, 6, false, 61000);
+    auto v = m.view(61250);
+    CHECK_RES(v, "superseded");
+    CHECK(v.lastResolution.announcement.position == 5);
+    CHECK_STATE(v, "pending");
+    CHECK_CONF(v, "exact");
 }
 
 static void aLaterInsertOverwrites() {
@@ -344,10 +378,12 @@ int main() {
     nonImmediateWhilePlayingRestsPending();
     pendingIsConsumedByItsOwnStart();
     queryNextIsNotABoundary();
-    boundaryWithoutTheStartIsConsumedUnresolved();
+    boundaryWithoutTheStartDoesNotRetireTheAnnouncement();
     playingNamingTheSlotIsTheParentMovingOn();
-    aStopIsABoundaryPassed();
+    aStopDoesNotDisarmTheSlot();
     aDifferentPlaylistStartingIsABoundaryPassed();
+    aLateStartStillProvesConsumption();
+    anUnresolvedPendingIsStillOverwritable();
     aLaterInsertOverwrites();
     anImmediateInsertSupersedesAPending();
     awaitingStartResolvesOnlyTwoWays();
