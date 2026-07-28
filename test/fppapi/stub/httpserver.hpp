@@ -62,10 +62,15 @@ public:
     virtual PM_STUB_RESP render_HEAD(const http_request& req) { return render_GET(req); }
 };
 
+/* Transcribed from the libhttpserver actually installed on the 8.5.1 rig box
+ * (/usr/include/httpserver/webserver.hpp:96-98).  An earlier version of this
+ * stub also declared a two-argument `unregister_resource`, which real
+ * libhttpserver does NOT have — the stub was more permissive than the library,
+ * so the harness passed and the box's compiler rejected it.  A stub that
+ * accepts more than the real thing is not a check; it is a blindfold. */
 class webserver {
 public:
-    void register_resource(const std::string&, http_resource*, bool = false) {}
-    void unregister_resource(const std::string&, http_resource*) {}
+    bool register_resource(const std::string&, http_resource*, bool = false) { return true; }
     void unregister_resource(const std::string&) {}
 };
 

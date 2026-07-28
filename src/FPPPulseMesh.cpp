@@ -222,7 +222,11 @@ public:
     void unregisterApis(httpserver::webserver* ws) override
     {
 #ifdef PM_HAVE_PLAYLIST_INSERTED
-        ws->unregister_resource(PM_MIRROR_PATH, this);
+        // One argument, not two: real libhttpserver declares only
+        // `unregister_resource(const std::string&)` (webserver.hpp:98).  FPP's
+        // drogon shim adds a two-argument form, so the one-argument call is
+        // the only spelling that exists on BOTH.
+        ws->unregister_resource(PM_MIRROR_PATH);
 #else
         (void)ws;
 #endif

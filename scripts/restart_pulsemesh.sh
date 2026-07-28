@@ -70,14 +70,17 @@ run_script() {
     local script_path="$1"
     local script_name="$2"
     local step_number="$3"
-    
+
     log_step "Step $step_number: Running $script_name..."
-    
-    if ! "$script_path"; then
-        log_error "$script_name failed (exit code: $?)"
+
+    "$script_path"
+    local exit_code=$?
+
+    if [[ $exit_code -ne 0 ]]; then
+        log_error "$script_name failed (exit code: $exit_code)"
         return 1
     fi
-    
+
     log_info "$script_name completed successfully"
     return 0
 }
@@ -182,8 +185,8 @@ restart_service() {
     # Step 3: Start the service
     if ! run_script "$START_SCRIPT" "start_pulsemesh.sh" "3"; then
         log_error "Failed to start PulseMesh Connector"
-        log_error "The binary was updated but failed to start"
-        log_error "Check the logs and try starting manually"
+        log_error "The service failed to start after update check"
+        log_error "Check the logs for details and try starting manually"
         exit 1
     fi
     

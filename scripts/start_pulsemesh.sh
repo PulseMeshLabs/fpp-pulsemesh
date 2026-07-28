@@ -63,11 +63,38 @@ get_running_pid() {
     fi
 }
 
+# Function to check if FPP is running
+check_fpp_running() {
+    if pgrep -x "fppd" >/dev/null 2>&1; then
+        return 0  # FPP is running
+    fi
+    return 1  # FPP is not running
+}
+
+# Function to show diagnostic info
+show_diagnostics() {
+    log_info "=== Diagnostic Information ==="
+
+    # Check FPP status
+    if check_fpp_running; then
+        log_info "FPP daemon (fppd) is running"
+    else
+        log_warn "FPP daemon (fppd) does not appear to be running"
+        log_warn "PulseMesh Connector requires FPP to be running"
+    fi
+
+    # Show last few lines of log if available
+    if [[ -f "$LOG_FILE" ]] && [[ -r "$LOG_FILE" ]]; then
+        log_info "Last 10 lines from log file:"
+        tail -n 10 "$LOG_FILE" 2>/dev/null || log_warn "Could not read log file"
+    fi
+}
+
 # Function to create log directory
 create_log_directory() {
     local log_dir
     log_dir=$(dirname "$LOG_FILE")
-    
+
     if [[ ! -d "$log_dir" ]]; then
         log_info "Creating log directory: $log_dir"
         if ! mkdir -p "$log_dir"; then
@@ -75,20 +102,26 @@ create_log_directory() {
             return 1
         fi
     fi
-    
+
     # Check if log directory is writable
     if [[ ! -w "$log_dir" ]]; then
         log_error "Log directory is not writable: $log_dir"
         return 1
     fi
-    
+
     return 0
 }
 
 # Function to start the service
 start_service() {
     log_info "Starting PulseMesh Connector..."
-    
+
+    # Check if FPP is running
+    if ! check_fpp_running; then
+        log_warn "FPP daemon (fppd) does not appear to be running"
+        log_warn "PulseMesh Connector may fail to start without FPP running"
+    fi
+
     # Check if binary exists
     if [[ ! -f "$BINARY_PATH" ]]; then
         log_error "Binary not found: $BINARY_PATH"
@@ -155,6 +188,8 @@ start_service() {
     else
         log_error "PulseMesh Connector failed to start or crashed immediately"
         log_error "Check the log file for details: $LOG_FILE"
+        echo ""
+        show_diagnostics
         rm -f "$PID_FILE"
         return 1
     fi
