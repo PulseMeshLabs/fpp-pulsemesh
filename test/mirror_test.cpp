@@ -430,6 +430,31 @@ static void unknownActionsAreInert() {
     CHECK_RES(m.view(60000), "none");
 }
 
+
+static void anEmptyNameIsFppdsSentinelNotAPlaylist() {
+    CASE("an empty announcement clears the slot rather than claiming one");
+    /* `InsertPlaylistAsNext` fires the callback as its FIRST statement, before
+     * any validation, and fppd's own empty sentinel for "slot unoccupied" is
+     * the empty string (`SwitchToInsertedPlaylist` tests m_insertedPlaylist
+     * != ""). Believing an empty announcement minted a pending/exact for a
+     * slot that verifiably holds nothing — and on an idle box it rested there
+     * forever, which is the one answer §13.2 acts on. */
+    PendingInsertMirror m(1000);
+    m.onInserted("", 1, 1, false, 1000);
+    CHECK_STATE(m.view(1000), "empty");
+    CHECK_STATE(m.view(60000), "empty");
+    CHECK(m.view(60000).confidence == Confidence::Exact);
+
+    /* And an empty assignment over a LIVE announcement really does clear it:
+     * that is what fppd just did to the slot. */
+    PendingInsertMirror n(1000);
+    n.onInserted("Show RF", 5, 5, false, 1000);
+    CHECK_STATE(n.view(1250), "pending");
+    n.onInserted("", 1, 1, false, 2000);
+    CHECK_STATE(n.view(2000), "empty");
+    CHECK_RES(n.view(2000), "superseded");
+}
+
 int main() {
     idleNonImmediateNeverRestsPending();
     idleImmediateResolvesTheSameWay();
@@ -459,6 +484,7 @@ int main() {
     theEpochMarksARestart();
     actionStringsMapOnce();
     unknownActionsAreInert();
+    anEmptyNameIsFppdsSentinelNotAPlaylist();
 
     if (g_failures) {
         std::printf("\n%d check(s) failed\n", g_failures);

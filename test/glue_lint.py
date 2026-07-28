@@ -2,11 +2,25 @@
 """Structural checks on the plugin glue.
 
 The state machine is unit-tested; the ~30 lines that wire it into fppd are not,
-because exercising them needs a real fppd.  These are the two properties of
-that glue whose failure is SILENT and TOTAL — the mirror keeps answering, it
-just answers from nothing — so they are asserted structurally rather than left
-to the §22.5 rig alone.  A lint is a weaker instrument than a test; it is here
-because the alternative for these two is no instrument.
+because exercising them needs a real fppd.  These are the properties of that
+glue whose failure is SILENT and TOTAL — the mirror keeps answering, it just
+answers from nothing — so they are asserted structurally rather than left to
+the §22.5 rig alone.  A lint is a weaker instrument than a test; it is here
+because the alternative for these is no instrument.
+
+Every check must survive the tamper that motivates it, and TWO of them did not
+until 2026-07-28.  The announcement feed — `playlistInserted`, the wire the
+whole machine is named after — was not checked at all: deleting
+`m_mirror.onInserted(...)` left every instrument green (the host tests drive
+the machine directly, the four compat builds are -fsyntax-only and cannot see
+a deleted statement, and `override` still binds), while on a live box the
+mirror would answer `state: empty, mirror_confidence: exact` forever.  `exact`
+is the single word §13.2 acts on, so the connector would read the unchanged
+`announcement_seq` as "fppd never ran the command" and flag
+`insert_not_announced` on every SUCCESSFUL insert.  And check 3's route guard
+was verified by PROXIMITY rather than polarity: swapping the #ifdef branches
+left the guard line within its search window, so a build that serves the route
+only where nothing can feed it passed.
 """
 import pathlib
 import re
@@ -71,7 +85,42 @@ else:
             fail("the mirror is fed a hardcoded size, not the reported one")
 
 # ---------------------------------------------------------------------------
-# 2. The route is not served on a build that cannot feed it.
+# 2. The announcement reaches the mirror, with the values fppd reported.
+#
+# This is the machine's only input for "an insert exists".  Without it every
+# read answers `empty/exact` — a durable false `exact`, which is worse than
+# no route at all, because §13.2 acts on `exact` alone.  Nothing else can see
+# this: the host tests call `onInserted` directly and the compat builds are
+# syntax-only.
+# ---------------------------------------------------------------------------
+ins_start = find(r"void playlistInserted\(")
+if ins_start is None:
+    fail("playlistInserted is not implemented at all")
+else:
+    ins_end = find(r"^    virtual void playlistCallback\(", ins_start)
+    feed = find(r"m_mirror\.onInserted", ins_start, ins_end)
+    if feed is None:
+        fail("playlistInserted never feeds the mirror")
+    else:
+        body = "\n".join(lines[ins_start:ins_end or len(lines)])
+        # Each argument must be the one fppd handed us. A hardcoded `immediate`
+        # freezes a Pending announcement at `exact` forever — no boundary event
+        # can degrade what was never announced correctly — and a hardcoded
+        # position aims §13.2's repair at the wrong entry.
+        call = re.search(r"m_mirror\.onInserted\(([^;]*)\)", body, re.S)
+        args = [a.strip() for a in call.group(1).split(",")] if call else []
+        expected = ["playlist", "position", "endPosition", "immediate"]
+        if len(args) < 5:
+            fail("the mirror announcement is missing arguments")
+        else:
+            for want, got in zip(expected, args):
+                if got != want:
+                    fail(f"the mirror announcement passes {got!r} where fppd reported {want!r}")
+        if not re.search(r"std::lock_guard<std::mutex>\s+\w+\(m_mirrorMutex\)", body):
+            fail("playlistInserted feeds the mirror without holding m_mirrorMutex")
+
+# ---------------------------------------------------------------------------
+# 3. The route is not served on a build that cannot feed it.
 #
 # `playlistInserted` first shipped in FPP 8.5.  On an older plugin API nothing
 # ever announces an insert, so an unguarded route would answer `empty` with
@@ -83,9 +132,20 @@ reg = find(r"register_resource\(PM_MIRROR_PATH")
 if reg is None:
     fail("the mirror route is never registered")
 else:
-    guard = find(r"#ifdef PM_HAVE_PLAYLIST_INSERTED", max(0, reg - 6), reg)
+    # POLARITY, not proximity. Finding the #ifdef line above the call proves
+    # only that the two are near each other — swapping the branches so the
+    # route is served in the #else left the guard inside the window and passed,
+    # while shipping exactly the build the guard exists to prevent. So: walk
+    # from the #ifdef down to the registration and refuse any #else in between.
+    guard = find(r"#ifdef PM_HAVE_PLAYLIST_INSERTED", max(0, reg - 12), reg)
     if guard is None:
         fail("register_resource is not guarded by #ifdef PM_HAVE_PLAYLIST_INSERTED")
+    else:
+        between = lines[guard + 1:reg]
+        if any(re.match(r"\s*#\s*(else|elif)\b", ln) for ln in between):
+            fail("the mirror route is registered in the #else — it is served "
+                 "ONLY where nothing can feed it, which is the inversion of "
+                 "the rule")
 
 if failures:
     for f in failures:

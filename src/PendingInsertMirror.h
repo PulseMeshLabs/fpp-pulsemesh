@@ -144,6 +144,25 @@ public:
     void onInserted(const std::string& playlist, int position, int endPosition,
                     bool immediate, int64_t nowMs) {
         settle(nowMs);
+        /* An empty name is fppd's EMPTY SENTINEL, not a playlist.
+         * `SwitchToInsertedPlaylist` treats `m_insertedPlaylist != ""` as "slot
+         * occupied", so assigning "" is how the slot is cleared — and
+         * `InsertPlaylistAsNext` fires this callback as its first statement,
+         * before any validation, so a raw malformed POST reaches us here.
+         * Believing it minted a `pending` announcement at confidence `exact`
+         * for a slot that verifiably holds nothing, and on an idle box it
+         * rested there indefinitely.  `pending/exact` is the one answer §13.2
+         * acts on, so the mirror must not invent one.  Superseding first is
+         * still right: an empty assignment really does clear whatever was
+         * there. */
+        if (playlist.empty()) {
+            if (m_state != MirrorState::Empty) {
+                resolve(Resolution::Superseded, nowMs);
+            }
+            m_hasPending = false;
+            m_state = MirrorState::Empty;
+            return;
+        }
         if (m_state != MirrorState::Empty) {
             resolve(Resolution::Superseded, nowMs);
         }
@@ -261,14 +280,6 @@ private:
         m_deadlineMs = 0;
     }
 
-    /* The ONE place that decides what counts as a boundary having passed.
-     * QueryNext is excluded here and nowhere else: it fires at :825 when an
-     * entry finished, BEFORE the boundary's SwitchToInsertedPlaylist is even
-     * attempted (:850), so it proves nothing about the slot — but an earlier
-     * draft ALSO short-circuited it at the top of onPlaylistEvent, and that
-     * second copy was dead: a probe deleting it changed no output, because
-     * this list already excluded it.  A check no test misses when it is
-     * deleted is not a check; it is where the two copies drift apart. */
     /* Does a `start` NAMING the slot playlist, reporting this size, look like
      * the inserted RANGE starting — as opposed to the whole playlist being
      * started afresh?
@@ -294,6 +305,14 @@ private:
         return size == m_pending.endPosition - m_pending.position + 1;
     }
 
+    /* The ONE place that decides what counts as a boundary having passed.
+     * QueryNext is excluded here and nowhere else: it fires at :825 when an
+     * entry finished, BEFORE the boundary's SwitchToInsertedPlaylist is even
+     * attempted (:850), so it proves nothing about the slot — but an earlier
+     * draft ALSO short-circuited it at the top of onPlaylistEvent, and that
+     * second copy was dead: a probe deleting it changed no output, because
+     * this list already excluded it.  A check no test misses when it is
+     * deleted is not a check; it is where the two copies drift apart. */
     static bool isBoundaryPassing(PlaylistAction action) {
         return action == PlaylistAction::Start || action == PlaylistAction::Playing ||
                action == PlaylistAction::Stop;
@@ -417,9 +436,18 @@ inline std::string announcementJson(const Announcement& a) {
  * must not jump when NTP steps the wall clock, which on a Pi that boots
  * without a battery-backed RTC is an ordinary event rather than an exotic one.
  * `mirror_epoch_ms` is the wall clock at construction — it names the process,
- * so a changed epoch is proof that an older answer is VOID rather than stale,
- * and `mirror_epoch_ms + announced_at_ms` converts a mirror timestamp back to
- * wall time. */
+ * so a changed epoch is proof that an older answer is VOID rather than stale.
+ *
+ * It does NOT convert: `mirror_epoch_ms + announced_at_ms` is not a wall-clock
+ * instant, and this comment used to claim it was.  The monotonic source is
+ * CLOCK_MONOTONIC, which counts from BOOT and not from this process, and the
+ * mirror records no monotonic baseline at construction — so the sum is off by
+ * however long the box had been up when fppd started.  The project's own
+ * captured bytes show the size of it: a frame with `mirror_epoch_ms`
+ * 1785230603529 carries `announced_at_ms` 499699000, and the "converted" time
+ * lands almost six days in the future.  Mirror timestamps are comparable to
+ * each other and to `uptime_ms`, and to nothing else; a reader who needs an
+ * age wants `uptime_ms - announced_at_ms`. */
 inline std::string toJson(const MirrorView& v, int64_t nowMs) {
     std::string s = "{\"mirror_version\":1";
     s += ",\"mirror_epoch_ms\":" + std::to_string(v.epochMs);
