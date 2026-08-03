@@ -6,6 +6,7 @@
   "homeURL": "https://github.com/PulseMeshLabs/fpp-pulsemesh",
   "srcURL": "https://github.com/PulseMeshLabs/fpp-pulsemesh.git",
   "bugURL": "https://github.com/PulseMeshLabs/fpp-pulsemesh/issues",
+  "iconURL": "https://raw.githubusercontent.com/PulseMeshLabs/fpp-pulsemesh/main/icon.png",
   "versions": [
   {
     "minFPPVersion": "7.0",
