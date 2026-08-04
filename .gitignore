@@ -3,3 +3,7 @@
 # host test binaries
 test/mirror_test
 test/*.dSYM/
+
+# FPP headers extracted at test time from a local FPP checkout (LGPL, not
+# vendored) — see test/fppapi/PROVENANCE
+test/fppapi/v*/

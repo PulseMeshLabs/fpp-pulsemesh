@@ -10,6 +10,13 @@
 #include <mutex>
 #include <string>
 
+/* Use the real log.h when the header set under test carries one (vmaster
+ * does): real macro expansion beats the approximation below, and defining
+ * both would redefine under -Werror. */
+#if __has_include("log.h")
+#include "log.h"
+#else
+
 enum LogMask_t { VB_PLUGIN, VB_GENERAL };
 
 inline void pm_stub_log(int, const std::string&) {}
@@ -27,3 +34,5 @@ template <typename T, typename... Rest>
 inline T pm_stub_first(T first, Rest...) {
     return first;
 }
+
+#endif /* !__has_include("log.h") */

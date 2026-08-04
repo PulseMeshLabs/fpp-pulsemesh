@@ -1,31 +1,35 @@
-These headers are VERBATIM copies from the Falcon Player source tree.  They
-are here so the plugin's override set can be compiled against the REAL base
-classes on both plugin-API shapes without an FPP checkout.  Nothing in this
-directory is hand-written except stub/, which stands in for third-party
+The fppapi/v* header sets are FPP's own plugin headers — Copyright the Falcon
+Player Developers, LGPL v2.1.  They are NOT vendored: this repo is unlicensed
+and distributes no FPP code.  `make compat` extracts them into gitignored
+directories from a local FPP checkout (FPP_SRC, default ~/projects/fpp) on
+every run.  Only stub/ is hand-written, standing in for the third-party
 libraries FPP itself pulls in (jsoncpp, libhttpserver, drogon).
 
-  v80/Plugin.h       <- git show 8.0:src/Plugin.h
-  v8/Plugin.h        <- git show 8.5.1:src/Plugin.h
-  vmaster/Plugin.h   <- git show master:src/Plugin.h
-  vmaster/fpphttp.h  <- git show master:src/fpphttp.h
+  v80      8.0                src/Plugin.h
+  v8       8.5.1              src/Plugin.h
+  v9       9.5.3              src/Plugin.h
+  v10      origin/v10.0-beta  src/{Plugin.h, fpphttp.h, fpphttp_types.h,
+                                   fpp-json-fwd.h}
+  vmaster  origin/master      src/{the v10 set + log.h}
 
-  8.0     bd91a86c410dce6f24b71bd73201d3b57012367d
-  8.5.1   0f9c98a9ecb939ea4c69050b45174fa248ac8c33
-  master  b58bfef51460b2b5be2bbe1b5a98bb700b8fe9cb
+Why the shapes matter: 8.x and 9.x declare `registerApis(httpserver::webserver*)`
+against real libhttpserver (9.5.3's Plugin.h differs from 8.5.1's only by an
+unrelated constructor and settingChanged).  FPP 10.0 adds a no-argument
+`registerApis()` and demotes the old signature to a [[deprecated]] shim that
+warns per route; the two v10 builds in ../Makefile cover the native path and
+the shim fallback.  The libhttpserver-era libraries also differ in the
+top-level cv-qualification of render_GET's return type — a hard error on
+mismatch — so the plugin derives it with decltype, and stub/httpserver.hpp is
+compiled BOTH ways (PM_STUB_CONST_RETURN) to prove the derivation.
 
-Refresh with:  make -C test refresh-fppapi FPP_SRC=/path/to/fpp
-
-Why both shapes matter: releases up to and including 10.x declare
-`registerApis(httpserver::webserver*)` against real libhttpserver; master's
-drogon migration keeps that signature as a [[deprecated]] shim that routes into
-drogon, and adds a no-argument form.  The two libraries also differ in the
-top-level cv-qualification of render_GET's return type — a mismatch there is a
-hard error, not a warning, so the plugin derives the type from the base with
-decltype instead of asserting it.  stub/httpserver.hpp is compiled BOTH ways
-(PM_STUB_CONST_RETURN) to prove that derivation binds under either.
+vmaster carries log.h because master's Plugin.h includes it; stub/fpp-pch.h
+defers to a real log.h when present, so that build exercises the real
+LogInfo/LogErr expansions and the trantor LOG_* collision that
+stub/drogon/HttpAppFramework.h reproduces on purpose.
 
 `playlistInserted` — the callback the whole §13.1 mirror rests on — was added
 to FPP on 2024-12-07 and first shipped in 8.5.  It is absent from 8.0 and 7.0,
-which pluginInfo.json still declares support for; v8/Plugin.h is pinned at
-8.5.1 because that is the OLDEST released line carrying it, and it is one of
-the two rig boxes.
+which pluginInfo.json still declares support for; v8 is pinned at 8.5.1
+because that is the OLDEST released line carrying it, and it is one of the
+two rig boxes.  v10 is pinned at the v10.0-beta branch because that is the
+line the plugin is currently tested against (10.x beta 2).

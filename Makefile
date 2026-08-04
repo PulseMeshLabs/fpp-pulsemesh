@@ -21,6 +21,16 @@ ifneq ($(shell grep -c playlistInserted $(SRCDIR)/Plugin.h 2>/dev/null),0)
 CXXFLAGS_src/FPPPulseMesh.o += -DPM_HAVE_PLAYLIST_INSERTED=1
 endif
 
+# FPP 10.0 added a no-argument registerApis() and demoted the libhttpserver-
+# shaped one to a [[deprecated]] shim that raises a UI warning per registered
+# route.  Same probe discipline as above: grep the header for the new virtual
+# itself, not a version string.
+ifneq ($(shell grep -c 'virtual void registerApis()' $(SRCDIR)/Plugin.h 2>/dev/null),0)
+CXXFLAGS_src/FPPPulseMesh.o += -DPM_HAVE_NOARG_REGISTER_APIS=1
+# the native path calls drogon::app() from the plugin; same pair fpp_so.mk links
+LIBS_fpp_PulseMesh_so += -ldrogon -ltrantor
+endif
+
 
 %.o: %.cpp Makefile $(wildcard src/*.h)
 	$(CCACHE) $(CC) $(CFLAGS) $(CXXFLAGS) $(CXXFLAGS_$@) -c $< -o $@

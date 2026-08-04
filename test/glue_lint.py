@@ -128,24 +128,29 @@ else:
 # repair path acts on `exact`.  That is worse than no answer: unregistered, the
 # capability probe's 404 reports pending_insert_introspection honestly false.
 # ---------------------------------------------------------------------------
-reg = find(r"register_resource\(PM_MIRROR_PATH")
-if reg is None:
-    fail("the mirror route is never registered")
-else:
-    # POLARITY, not proximity. Finding the #ifdef line above the call proves
-    # only that the two are near each other — swapping the branches so the
-    # route is served in the #else left the guard inside the window and passed,
-    # while shipping exactly the build the guard exists to prevent. So: walk
-    # from the #ifdef down to the registration and refuse any #else in between.
-    guard = find(r"#ifdef PM_HAVE_PLAYLIST_INSERTED", max(0, reg - 12), reg)
-    if guard is None:
-        fail("register_resource is not guarded by #ifdef PM_HAVE_PLAYLIST_INSERTED")
-    else:
-        between = lines[guard + 1:reg]
-        if any(re.match(r"\s*#\s*(else|elif)\b", ln) for ln in between):
-            fail("the mirror route is registered in the #else — it is served "
-                 "ONLY where nothing can feed it, which is the inversion of "
-                 "the rule")
+# Two registration sites, one per transport: register_resource() on the
+# libhttpserver path, drogon's registerHandler() on the native path.  Guarded
+# with the right POLARITY, not mere proximity (the docstring's second 2026-07-28
+# failure): the NEAREST preprocessor conditional above each call must be the
+# #ifdef itself — any #else/#elif/#endif in between means the wrong branch.
+SITES = [
+    ("register_resource", r"register_resource\(PM_MIRROR_PATH"),
+    ("registerHandler", r"registerHandler\(PM_MIRROR_PATH"),
+]
+for label, pattern in SITES:
+    reg = find(pattern)
+    if reg is None:
+        fail(f"the mirror route is never registered via {label}")
+        continue
+    guard = None
+    for i in range(reg - 1, -1, -1):
+        if re.match(r"\s*#\s*(ifdef|ifndef|if|else|elif|endif)\b", lines[i]):
+            guard = i
+            break
+    if guard is None or not re.search(r"#ifdef PM_HAVE_PLAYLIST_INSERTED", lines[guard]):
+        fail(f"{label}(PM_MIRROR_PATH...) is not immediately inside "
+             "#ifdef PM_HAVE_PLAYLIST_INSERTED — the route would be served "
+             "on a build where nothing can feed the mirror")
 
 if failures:
     for f in failures:
