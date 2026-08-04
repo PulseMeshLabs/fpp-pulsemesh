@@ -85,18 +85,61 @@ get_architecture() {
 }
 
 # Function to make HTTP request with error handling
+#
+# The fourth argument selects the timeout policy, which must differ by payload
+# size. A wall-clock cap that is generous for the few-byte version JSON is a
+# hard install failure for the ~7.5MB connector on any link slower than about
+# 250KB/s, so the "large" policy aborts only on a stalled transfer (no bytes
+# for STALL_SECONDS) rather than on elapsed time, and resumes across retries.
+STALL_BYTES_PER_SEC=1024
+STALL_SECONDS=15
+SMALL_MAX_TIME=30
+RETRY_COUNT=3
+RETRY_DELAY=3
+
+# Caps total time spent retrying, so an unreachable host fails in well under a
+# minute instead of serially burning every retry's full timeout. curl checks
+# this before starting each retry, so the true worst case is this limit plus one
+# final attempt's timeout.
+RETRY_MAX_TIME=30
+
 make_http_request() {
     local url="$1"
     local output_file="$2"
     local description="$3"
-    
+    local size_policy="${4:-small}"
+
     if command_exists curl; then
-        if ! curl -sSL --connect-timeout 10 --max-time 30 -o "$output_file" "$url"; then
+        # --fail turns an error page into a non-zero exit instead of a body that
+        # would later be misdiagnosed by the binary sniff in download_binary.
+        local curl_args=(--fail -sSL --connect-timeout 10
+                         --retry "$RETRY_COUNT" --retry-delay "$RETRY_DELAY" --retry-connrefused
+                         --retry-max-time "$RETRY_MAX_TIME")
+        if [[ "$size_policy" == "large" ]]; then
+            # -C - makes curl's own retries resume the partial file rather than
+            # restart it; on a 0-byte temp file it simply starts from the top.
+            curl_args+=(--speed-limit "$STALL_BYTES_PER_SEC" --speed-time "$STALL_SECONDS" -C -)
+        else
+            curl_args+=(--max-time "$SMALL_MAX_TIME")
+        fi
+
+        if ! curl "${curl_args[@]}" -o "$output_file" "$url"; then
             log_error "Failed to $description using curl"
             return 1
         fi
     elif command_exists wget; then
-        if ! wget -q --timeout=30 --connect-timeout=10 -O "$output_file" "$url"; then
+        # wget's --read-timeout is already per-read, so it matches the "large"
+        # stall semantics above; -c is deliberately omitted because wget refuses
+        # to combine continuation with -O.
+        local wget_args=(-q --dns-timeout=10 --connect-timeout=10
+                         --tries="$RETRY_COUNT" --waitretry="$RETRY_DELAY")
+        if [[ "$size_policy" == "large" ]]; then
+            wget_args+=(--read-timeout="$STALL_SECONDS")
+        else
+            wget_args+=(--read-timeout="$SMALL_MAX_TIME")
+        fi
+
+        if ! wget "${wget_args[@]}" -O "$output_file" "$url"; then
             log_error "Failed to $description using wget"
             return 1
         fi
@@ -161,7 +204,7 @@ download_binary() {
     log_info "Downloading PulseMesh Connector v$version for architecture: $arch"
     log_info "Download URL: $download_url"
     
-    if ! make_http_request "$download_url" "$temp_file" "download binary"; then
+    if ! make_http_request "$download_url" "$temp_file" "download binary" "large"; then
         rm -f "$temp_file"
         return 1
     fi
