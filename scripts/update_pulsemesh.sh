@@ -184,22 +184,21 @@ get_remote_version() {
     return 0
 }
 
-# Verify a downloaded file against a SHA-256 checksum published beside the
+# Verify a downloaded file against the SHA-256 checksum published beside the
 # binary (<download-url>.sha256, containing the hex digest as its first word).
-# A fetched checksum that mismatches is fatal; a missing checksum (endpoint
-# not yet published for this release track) only warns, so verification
-# hardens automatically once the server publishes digests without bricking
-# installs until then.
+# Any failure — unreachable digest, malformed digest, or mismatch — is fatal:
+# the release endpoints publish a digest for every binary they serve, so a
+# missing one means the download path itself is broken or tampered with.
 verify_checksum() {
     local file="$1"
     local checksum_url="$2"
     local checksum_file expected actual
     checksum_file=$(mktemp)
 
-    if ! make_http_request "$checksum_url" "$checksum_file" "fetch checksum (optional)"; then
-        log_warn "No checksum published at $checksum_url; skipping verification."
+    if ! make_http_request "$checksum_url" "$checksum_file" "fetch checksum"; then
+        log_error "Could not fetch checksum from $checksum_url; refusing unverified binary."
         rm -f "$checksum_file"
-        return 0
+        return 1
     fi
 
     expected=$(awk '{print tolower($1); exit}' "$checksum_file")
