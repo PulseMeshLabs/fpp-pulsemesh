@@ -7,6 +7,8 @@
   "srcURL": "https://github.com/PulseMeshLabs/fpp-pulsemesh.git",
   "bugURL": "https://github.com/PulseMeshLabs/fpp-pulsemesh/issues",
   "iconURL": "https://raw.githubusercontent.com/PulseMeshLabs/fpp-pulsemesh/main/icon.png",
+  "minMemoryMB": 128,
+  "minCpuCores": 1,
   "versions": [
   {
     "minFPPVersion": "7.0",
