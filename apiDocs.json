@@ -1,0 +1,23 @@
+{
+  "paths": {
+    "/PulseMesh/pending-insert": {
+      "get": {
+        "summary": "Read the pending-insert mirror",
+        "description": "State of fppd's single pending-insert slot as mirrored by the plugin: whether an inserted playlist announcement is pending or consumed, with a confidence qualifier evaluated at read time. Answers 404 on FPP builds whose plugin API has no playlistInserted callback (added in FPP 8.5), so a 404 honestly reports that pending-insert introspection is unavailable.",
+        "responses": {
+          "200": {
+            "description": "Mirror state as JSON"
+          }
+        }
+      },
+      "head": {
+        "summary": "Probe for pending-insert introspection support",
+        "responses": {
+          "200": {
+            "description": "Route present; pending-insert introspection is available"
+          }
+        }
+      }
+    }
+  }
+}

@@ -21,14 +21,17 @@ ifneq ($(shell grep -c playlistInserted $(SRCDIR)/Plugin.h 2>/dev/null),0)
 CXXFLAGS_src/FPPPulseMesh.o += -DPM_HAVE_PLAYLIST_INSERTED=1
 endif
 
-# FPP 10.0 added a no-argument registerApis() and demoted the libhttpserver-
-# shaped one to a [[deprecated]] shim that raises a UI warning per registered
-# route.  Same probe discipline as above: grep the header for the new virtual
-# itself, not a version string.
+# FPP 10.0 (plugin API 6) has a no-argument registerApis() and routes plugin
+# APIs through FPPPlugins::registerPluginApi() (fpphttp.h), which FPP disarms
+# at unload.  Same probe discipline as above, and BOTH greps must hit: early
+# 10.0 trees carry the no-arg virtual but not registerPluginApi, and there the
+# [[deprecated]] libhttpserver shim branch still routes.
 ifneq ($(shell grep -c 'virtual void registerApis()' $(SRCDIR)/Plugin.h 2>/dev/null),0)
+ifneq ($(shell grep -c 'registerPluginApi' $(SRCDIR)/fpphttp.h 2>/dev/null),0)
 CXXFLAGS_src/FPPPulseMesh.o += -DPM_HAVE_NOARG_REGISTER_APIS=1
-# the native path calls drogon::app() from the plugin; same pair fpp_so.mk links
+# makeStringResponse() calls into drogon; same pair fpp_so.mk links
 LIBS_fpp_PulseMesh_so += -ldrogon -ltrantor
+endif
 endif
 
 

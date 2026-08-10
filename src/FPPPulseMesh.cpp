@@ -22,30 +22,16 @@
 #include "Warnings.h"
 
 // The plugin HTTP surface has three shapes: 8.x/9.x libhttpserver
-// (registerApis(webserver*)), FPP 10.0's drogon API (no-arg registerApis();
-// the old signature survives as a [[deprecated]] shim that raises a UI
-// warning per route), and the migration window between them (fpphttp.h
-// present, no-arg virtual not yet).  The Makefile greps the Plugin.h being
-// compiled against for the no-arg virtual: native drogon registration where
-// it exists, the libhttpserver signature otherwise.
+// (registerApis(webserver*)), FPP 10.0 plugin API 6 (no-arg registerApis()
+// routing through FPPPlugins::registerPluginApi(), which FPP can disarm at
+// unload), and the migration window between them (fpphttp.h present with
+// libhttpserver source shims, registerPluginApi() not yet).  The Makefile
+// greps the headers being compiled against and defines this only when BOTH
+// the no-arg virtual (Plugin.h) and registerPluginApi (fpphttp.h) exist;
+// anything else takes the libhttpserver signature — real on 8.x/9.x, shimmed
+// in the migration window.
 #ifdef PM_HAVE_NOARG_REGISTER_APIS
-// HttpAppFramework.h must precede fpphttp.h, which undefines trantor's
-// LOG_DEBUG while drogon's own headers still need it (see fpphttp_compat.cpp).
-#include <drogon/HttpAppFramework.h>
 #include "fpphttp.h"
-// fpphttp.h's trantor-macro cleanup is one-shot; if a future PCH pulls it in
-// first, the framework header above re-defines LOG_* after the cleanup ran.
-#ifdef LOG_WARN
-#undef LOG_WARN
-#endif
-#ifdef LOG_INFO
-#undef LOG_INFO
-#endif
-#ifdef LOG_DEBUG
-#undef LOG_DEBUG
-#endif
-#include <atomic>
-#include <functional>
 #elif __has_include("fpphttp.h")
 #include "fpphttp.h"
 #else
@@ -231,29 +217,18 @@ public:
     }
 
 #ifdef PM_HAVE_NOARG_REGISTER_APIS
-    // FPP 10.x: register with drogon directly.  The [[deprecated]] webserver*
-    // pair stays unimplemented, so the warning-raising shim is never involved.
+    // FPP 10 (plugin API 6): FPP owns the route slot.  Capturing `this` is
+    // safe because unregisterPluginApi() waits out in-flight requests and
+    // destroys the handler before returning, and PluginManager unregisters
+    // before it deletes the plugin object.
     void registerApis() override
     {
 #ifdef PM_HAVE_PLAYLIST_INSERTED
-        s_mirrorServer.store(this);
-        // drogon has no route removal, so install the handler once; a
-        // re-registration only re-arms the slot.
-        static bool s_routeInstalled = false;
-        if (!s_routeInstalled) {
-            s_routeInstalled = true;
-            auto handler = [](const HttpRequestPtr&,
-                              std::function<void(const HttpResponsePtr&)>&& callback) {
-                FPPPulseMeshPlugin* self = s_mirrorServer.load();
-                if (!self) {
-                    callback(makeStringResponse("Plugin not loaded", 410, "text/plain"));
-                    return;
-                }
-                callback(makeStringResponse(self->mirrorJson(), 200, "application/json"));
-            };
-            drogon::app().registerHandler(PM_MIRROR_PATH, std::move(handler),
-                                          { drogon::Get, drogon::Head });
-        }
+        FPPPlugins::registerPluginApi(PM_MIRROR_PATH,
+            [this](const HttpRequestPtr&, HttpCallback&& callback) {
+                callback(makeStringResponse(mirrorJson(), 200, "application/json"));
+            },
+            { drogon::Get, drogon::Head });
         LogInfo(VB_PLUGIN, "PulseMesh mirror registered at /api/plugin-apis" PM_MIRROR_PATH "\n");
 #else
         // Without playlistInserted nothing feeds the mirror — leave the route
@@ -267,15 +242,13 @@ public:
 
     void unregisterApis() override
     {
-        // Disarm; later requests get 410.  fppd joins drogon's threads before
-        // any dlclose (~APIServer, httpAPI.cpp), so the handler's code cannot
-        // outlive its .so.
-        s_mirrorServer.store(nullptr);
+        // Safe for a path that was never registered.
+        FPPPlugins::unregisterPluginApi(PM_MIRROR_PATH);
     }
 #else
-    // 8.x/9.x — and the fallback if the probe misses on a drogon tree, where
-    // the [[deprecated]] shim still routes: worst case is FPP's UI warning,
-    // not a dead route.
+    // 8.x/9.x — and the migration-window fpphttp.h, whose libhttpserver shims
+    // still route this [[deprecated]] signature (API 6 removed them, but any
+    // tree with registerPluginApi takes the branch above instead).
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     void registerApis(httpserver::webserver* ws) override
@@ -328,13 +301,6 @@ private:
     bool m_socketInitialized = true;
     mutable std::mutex m_mirrorMutex;
     pulsemesh::PendingInsertMirror m_mirror;
-
-#ifdef PM_HAVE_NOARG_REGISTER_APIS
-    // The drogon handler reaches the plugin through this slot rather than a
-    // captured `this`: the route outlives the object, so it must be able to
-    // answer 410 with the object gone.
-    inline static std::atomic<FPPPulseMeshPlugin*> s_mirrorServer{ nullptr };
-#endif
 
     // One body for both transports (render_GET on 8.x/9.x, drogon on 10.x).
     std::string mirrorJson()

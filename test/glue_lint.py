@@ -129,13 +129,15 @@ else:
 # capability probe's 404 reports pending_insert_introspection honestly false.
 # ---------------------------------------------------------------------------
 # Two registration sites, one per transport: register_resource() on the
-# libhttpserver path, drogon's registerHandler() on the native path.  Guarded
-# with the right POLARITY, not mere proximity (the docstring's second 2026-07-28
-# failure): the NEAREST preprocessor conditional above each call must be the
-# #ifdef itself — any #else/#elif/#endif in between means the wrong branch.
+# libhttpserver path, FPPPlugins::registerPluginApi() on the plugin-API-6
+# path.  Guarded with the right POLARITY, not mere proximity (the docstring's
+# second 2026-07-28 failure): the NEAREST preprocessor conditional above each
+# call must be the #ifdef itself — any #else/#elif/#endif in between means the
+# wrong branch.  The pattern is anchored with FPPPlugins:: so it cannot match
+# the unconditional unregisterPluginApi() teardown call instead.
 SITES = [
     ("register_resource", r"register_resource\(PM_MIRROR_PATH"),
-    ("registerHandler", r"registerHandler\(PM_MIRROR_PATH"),
+    ("registerPluginApi", r"FPPPlugins::registerPluginApi\(PM_MIRROR_PATH"),
 ]
 for label, pattern in SITES:
     reg = find(pattern)

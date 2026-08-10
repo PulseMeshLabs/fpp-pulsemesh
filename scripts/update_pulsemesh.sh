@@ -184,6 +184,41 @@ get_remote_version() {
     return 0
 }
 
+# Verify a downloaded file against a SHA-256 checksum published beside the
+# binary (<download-url>.sha256, containing the hex digest as its first word).
+# A fetched checksum that mismatches is fatal; a missing checksum (endpoint
+# not yet published for this release track) only warns, so verification
+# hardens automatically once the server publishes digests without bricking
+# installs until then.
+verify_checksum() {
+    local file="$1"
+    local checksum_url="$2"
+    local checksum_file expected actual
+    checksum_file=$(mktemp)
+
+    if ! make_http_request "$checksum_url" "$checksum_file" "fetch checksum (optional)"; then
+        log_warn "No checksum published at $checksum_url; skipping verification."
+        rm -f "$checksum_file"
+        return 0
+    fi
+
+    expected=$(awk '{print tolower($1); exit}' "$checksum_file")
+    rm -f "$checksum_file"
+    if [[ ! "$expected" =~ ^[0-9a-f]{64}$ ]]; then
+        log_error "Checksum file at $checksum_url is malformed"
+        return 1
+    fi
+
+    actual=$(sha256sum "$file" | awk '{print $1}')
+    if [[ "$actual" != "$expected" ]]; then
+        log_error "SHA-256 mismatch for downloaded binary (expected $expected, got $actual)"
+        return 1
+    fi
+
+    log_info "SHA-256 checksum verified."
+    return 0
+}
+
 # Function to get local version
 get_local_version() {
     if [[ -f "$VERSION_FILE" ]]; then
@@ -222,7 +257,13 @@ download_binary() {
         rm -f "$temp_file"
         return 1
     fi
-    
+
+    # Verify against the published SHA-256 digest before trusting the file
+    if ! verify_checksum "$temp_file" "$download_url.sha256"; then
+        rm -f "$temp_file"
+        return 1
+    fi
+
     # Create binary directory if it doesn't exist
     mkdir -p "$BINARY_DIR"
     

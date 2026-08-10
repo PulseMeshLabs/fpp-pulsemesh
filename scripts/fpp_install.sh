@@ -15,15 +15,15 @@ make "SRCDIR=${SRCDIR}"
 if [ -f "/usr/local/bin/pulsemesh-connector" ]; then
     echo "Cleaning up possible existing pulsemesh-connector installation..."
 
-    sudo systemctl --now disable pulsemesh-connector.service 2>/dev/null || {
+    systemctl --now disable pulsemesh-connector.service 2>/dev/null || {
         echo "Didn't disable pulsemesh-connector.service (may not exist, this is OK)"
     }
 
-    sudo apt-get purge -y pulsemesh-connector 2>/dev/null || {
+    apt-get purge -y pulsemesh-connector 2>/dev/null || {
         echo "Didn't purge pulsemesh-connector package (may not be installed, this is OK)"
     }
 
-    sudo rm -f /etc/apt/sources.list.d/pulsemsh.list 2>/dev/null || {
+    rm -f /etc/apt/sources.list.d/pulsemsh.list 2>/dev/null || {
         echo "Didn't remove /etc/apt/sources.list.d/pulsemsh.list (may not exist, this is OK)"
     }
 

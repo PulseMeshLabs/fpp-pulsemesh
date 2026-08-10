@@ -17,3 +17,11 @@ if [ -f "${FPPDIR}/scripts/ManageApacheContentPolicy.sh" ]; then
 else
     echo "Skipping CSP removal: ManageApacheContentPolicy.sh not found (FPP version < 9)"
 fi
+
+# FPP majors before 10 have no runtime plugin unload, and this script is the
+# only code that runs before the plugin directory is deleted — without the
+# restart flag fppd keeps the stale plugin loaded until an unrelated restart.
+if [ -f "${FPPDIR}/scripts/common" ]; then
+    . "${FPPDIR}/scripts/common"
+    setSetting restartFlag 1
+fi
