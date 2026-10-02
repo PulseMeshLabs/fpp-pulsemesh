@@ -2,6 +2,7 @@
 
 # host test binaries
 test/mirror_test
+test/sync_gate_test
 test/*.dSYM/
 
 # FPP headers extracted at test time from a local FPP checkout (LGPL, not

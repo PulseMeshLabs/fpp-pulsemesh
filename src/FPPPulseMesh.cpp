@@ -47,6 +47,7 @@ using PmHttpResponse = decltype(std::declval<httpserver::http_resource&>().rende
 #endif
 
 #include "PendingInsertMirror.h"
+#include "MediaSyncGate.h"
 
 // `playlistInserted` was added to FPP's plugin API on 2024-12-07 and first
 // shipped in 8.5 — it is absent from 8.0 and 7.0, which this plugin still
@@ -81,7 +82,6 @@ public:
     FPPPulseMeshPlugin()
         : FPPPlugin("fpp-PulseMesh"),
           m_sockfd(-1),
-          m_lastMediaHalfSecond(-1),
           m_sendErrorCount(0),
           m_mirror(wallClockMs())
     {
@@ -191,26 +191,35 @@ public:
 
     virtual void SendMediaSyncStartPacket(const std::string &filename) override
     {
+        {
+            std::lock_guard<std::mutex> lock(m_mutex);
+            m_syncGate.reset();
+        }
         std::string message = "SendMediaSyncStartPacket/" + filename;
         writeToSocket(message);
     }
 
     virtual void SendMediaSyncStopPacket(const std::string &filename) override
     {
+        {
+            std::lock_guard<std::mutex> lock(m_mutex);
+            m_syncGate.reset();
+        }
         std::string message = "SendMediaSyncStopPacket/" + filename;
         writeToSocket(message);
     }
 
     virtual void SendMediaSyncPacket(const std::string &filename, float seconds) override
     {
-        int curTS = static_cast<int>(seconds * 2.0f);
+        // Holds an item's clamped 0.000 reports, forwards its first real
+        // position at once, then one report per half-second.  See
+        // MediaSyncGate.h.
         {
             std::lock_guard<std::mutex> lock(m_mutex);
-            if (m_lastMediaHalfSecond == curTS)
+            if (!m_syncGate.shouldForward(filename, seconds))
             {
                 return;
             }
-            m_lastMediaHalfSecond = curTS;
         }
         std::string message = "SendMediaSyncPacket/" + filename + "/" + std::to_string(seconds);
         writeToSocket(message);
@@ -294,7 +303,7 @@ public:
 private:
     int m_sockfd;
     struct sockaddr_un m_addr;
-    int m_lastMediaHalfSecond;
+    pulsemesh::MediaSyncGate m_syncGate;
     mutable std::mutex m_mutex;
     mutable std::mutex m_logMutex;
     mutable int m_sendErrorCount;

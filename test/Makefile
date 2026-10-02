@@ -1,4 +1,4 @@
-# Host tests for the pending-insert mirror.
+# Host tests for the pending-insert mirror and the media position gate.
 #
 #   make -C test check
 #
@@ -24,10 +24,13 @@ FPP_SRC ?= $(HOME)/projects/fpp
 COMPAT_FLAGS = -std=c++17 -fsyntax-only -Wall -Wextra -Werror -Wno-unused-parameter \
                -Ifppapi/stub -I../src
 
-all: mirror_test
+all: mirror_test sync_gate_test
 
 mirror_test: mirror_test.cpp ../src/PendingInsertMirror.h
 	$(CXX) $(CXXFLAGS) -o $@ mirror_test.cpp
+
+sync_gate_test: sync_gate_test.cpp ../src/MediaSyncGate.h
+	$(CXX) $(CXXFLAGS) -o $@ sync_gate_test.cpp
 
 # Extracted fresh on every compat run (cheap, and never stale relative to the
 # checkout).  Tags pin the released lines; origin/* for the moving ones so the
@@ -99,12 +102,13 @@ compat: fppapi-headers ../src/FPPPulseMesh.cpp ../src/PendingInsertMirror.h
 glue:
 	@python3 glue_lint.py
 
-check: mirror_test compat glue
+check: mirror_test sync_gate_test compat glue
 	./mirror_test
+	./sync_gate_test
 
 clean:
-	rm -f mirror_test
-	rm -rf mirror_test.dSYM
+	rm -f mirror_test sync_gate_test
+	rm -rf mirror_test.dSYM sync_gate_test.dSYM
 	rm -rf fppapi/v80 fppapi/v8 fppapi/v9 fppapi/v10mw fppapi/v10 fppapi/vmaster
 
 .PHONY: all check compat glue clean fppapi-headers
