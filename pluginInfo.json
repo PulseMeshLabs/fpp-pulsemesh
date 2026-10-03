@@ -9,6 +9,93 @@
   "iconURL": "https://raw.githubusercontent.com/PulseMeshLabs/fpp-pulsemesh/main/icon.png",
   "minMemoryMB": 128,
   "minCpuCores": 1,
+  "privacy": {
+    "summary": "Lets visitors hear your show's audio on their phones through PulseMesh (pulsemesh.io). It keeps this player in step with PulseMesh's servers and uploads your song files for streaming.",
+    "sends": [
+      {
+        "to": "pulsemesh.io",
+        "what": "this player's processor type",
+        "why": "to check for and download a newer PulseMesh Connector",
+        "alwaysOn": true
+      },
+      {
+        "to": "authority.pulsemesh.io",
+        "what": "song file names and fingerprints, what is playing, and your visitor-request playlist",
+        "why": "so visitors' phones play the right song at the right moment",
+        "alwaysOn": false
+      },
+      {
+        "to": "cfg.pulsemesh.io",
+        "what": "a request for the current list of time servers",
+        "why": "to find the nearest PulseMesh time server",
+        "alwaysOn": false
+      },
+      {
+        "to": "edge.pulsemesh.io",
+        "what": "this player's hostname, a pairing code and its device token",
+        "why": "to pair this player and sign it in to PulseMesh",
+        "alwaysOn": false
+      },
+      {
+        "to": "logs.pulsemesh.io",
+        "what": "your email, your message, the connector log and its settings",
+        "why": "so PulseMesh support can help when you send a support request",
+        "alwaysOn": false
+      },
+      {
+        "to": "pulsemesh.io",
+        "what": "your PulseMesh token and this player's hostname",
+        "why": "to link this player to your PulseMesh account",
+        "alwaysOn": false
+      },
+      {
+        "to": "sync.pulsemesh.io",
+        "what": "clock timing requests, to this and PulseMesh's other time servers",
+        "why": "to keep visitors' phones in step with this player",
+        "alwaysOn": false
+      },
+      {
+        "to": "upload.pulsemesh.io",
+        "what": "your song and video files",
+        "why": "so PulseMesh can stream them to visitors",
+        "alwaysOn": false
+      }
+    ],
+    "collects": [
+      {
+        "what": "a log of song file names, pairing codes and connection events",
+        "about": "operator",
+        "keptDays": null,
+        "canDelete": false,
+        "where": "logs/pulsemesh-connector.log"
+      },
+      {
+        "what": "a list of your media files with their fingerprints",
+        "about": "operator",
+        "keptDays": null,
+        "canDelete": false,
+        "where": "config/pulsemesh/"
+      }
+    ],
+    "sensors": [],
+    "remoteAccess": "none",
+    "systemChanges": [
+      {
+        "kind": "download",
+        "what": "downloads the PulseMesh Connector program from pulsemesh.io at install, on each FPP start, and when you switch versions"
+      },
+      {
+        "kind": "service",
+        "what": "runs the PulseMesh Connector in the background whenever FPP is running"
+      },
+      {
+        "kind": "core-settings",
+        "what": "removes the port 8089 page allowance older versions added, and sets FPP's restart-needed flag after install"
+      }
+    ],
+    "closedCode": true,
+    "other": "PulseMesh can start songs from the one playlist you choose for visitor requests; you can turn this off on the PulseMesh page."
+  },
   "versions": [
   {
     "minFPPVersion": "7.0",
