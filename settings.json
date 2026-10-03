@@ -14,7 +14,7 @@
             "tip": "Token from Connectors page at pulsemesh.io",
             "restart": 0,
             "reboot": 0,
-            "type": "text",
+            "type": "password",
             "default": "",
             "size": 30,
             "maxlength": 300
